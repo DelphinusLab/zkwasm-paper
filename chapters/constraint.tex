@@ -1,0 +1,115 @@
+\section{Arithmetic Circuits}
+\subsection{Brief of Halo2 Proof System}
+\label{chp:constraint-system}
+The arithmetic system we used to construct \zkwasm\, is Halo2's arithmetic system which is an extension of PLONK that supports custom arithmetic gates and polynomial lookup. Below we call circuits constructed by Halo's arithmetic system as PLONKish circuits and represents circuits by matrix of values with constraints between its columns. In addition to constraints between cells within a circuit, Halo also supports equal constraints between two cells and polynomial lookup.
+
+\smallskip\noindent\emph{Circuit Matrix.}
+
+\smallskip\noindent\emph{Constraint between Cells.}
+
+\smallskip\noindent\emph{Equality Constraints.} An equality constraint enforces that two given cells must be equal.
+
+\smallskip\noindent\emph{Polynomial Lookup.}
+
+%From a circuit description we can generate a proving key and a verification key, which are needed for the operations of proving and verification for that circuit.
+
+\subsection{Representing Basic types in Halo2 Constraint System}
+Recall that the polynomial commitment can prove a set of polynomials $p_i(x)$ has evaluation $v_i$ at $x_i$. Thus to prove a system of constraint holds in Section \ref{chp:constraint-system}, the Plonkish proof system does the following. First, it interpolate each column $c_i$ into polynomials $c_i(x)$ such that $c_i(j) = c_{ij}$ and $\mathcal{C}(c_i(x))$ holds when $x=1,2,3,\cdots$. When performing interpolating of $c_i(j)$, 
+
+To use KZG commitment scheme on polynomial $c_i$, we require $c_i(x) \in F$ where $F$ is the scalar field of some elliptic curve $\mathbf{C}$, therefore each $c_i(j)$ is in the scalar field $\mathbf{F}$ of elliptic curve $\mathbf{C}$ in Halo2's constraint system. However, since the basic types in webassembly is i64 and i32 which does not match the number field $\mathbf{F}$ in Halo2, we need to representing a variable $x:i32$ or $i64$ by adding one more constraint $x<2^{32}$ (or $x< 2^{64}$).
+
+In this paper, we use $\mathbf{T_N}$ to denote a table contains elements from $0$ to $2^N-1$. Also we uses polynomial lookup to constraint all values of a column $c_i$ so that for all $j$, $c_i(j) \in \mathbf{T_N}$ thus $\forall j, c_i(j) \le 2^N-1$ and we use $c_i \in \mathbf{T_N}$ to denote a column whose values are bounded by $2^N - 1$.
+
+\subsection{Representing Map using Polynomial Lookup of Tables}
+\label{chp:map-repr}
+Other than specifying range of columns, another usage of polynomial lookup is that we can encode state of key-value map into tables and using polynomial lookup to specify the semantics of getting a value of a map of a certain key. 
+
+Here is an example. Recall that we represent state of \zkwasm\, by \fullstate \, where $\mathcal{C}$ and $\mathcal{H}$ are fixed by the WASM image. We encode state $\mathcal{C}$ and $\mathcal{H}$ in tables $\mathbf{T}_\mathcal{C} : Addr \times Opcode$ and $\mathbf{T}_\mathcal{H}: Addr \times U64$. Therefore we can use the polynomial lookup to specify the semantic of getting opcode $op$ at address $addr$ in $\mathcal{C}$ by $(addr, op) \in \mathbf{T}_\mathcal{C}$ and specify the semantic of WASM of getting the initial byte data $v$ at address $addr$ in $\mathcal{H}$ by $\exists d, (d, addr \div 8) \in \mathbf{T}_\mathcal{H} \wedge v = (d \gg (addr \% 8)) \% 256$. More sophisticated usage of polynomial lookup can be find in Section \ref{chp:mem-stack-circuits} where we using lookup tables to encode dynamic memory and stack states.
+
+\subsection{Representing Math Semantic into Arithmetic Circuits}
+According to the WASM specification, the semantic of opcodes are usually defined as mathematical equations and state transformation. When implementing \zkwasm \, we need to construct arithmetic circuits in Halo2 such that the semantic of the opcodes are enforced. For example, suppose that the opcode $div_u$ (division of unsigned int) has the following semantic:
+\[ div_u(a, b) = (a - a \bmod b) \div b \] 
+It follows that to write the above mathematical definition into polynomial constraints we need to introduce intermediate witness $r$ such that the above semantics can be rewritten as follows:
+\begin{equation}
+\begin{cases}
+    a = div_u(a,b) * b + r \\
+    r < b
+\end{cases}
+\end{equation}
+However, since $r$ and $b$ are in $\mathbf{F}$, it needs more work to represent $r < b$ in to polynomial constraints. Fortunately, in \zkwasm, we uses range check to constraint $r$ and $b$ within 64 bits, the above constraints can be further rewritten into the following polynomial constraints with one more extra witness $k$: 
+\begin{equation}
+\begin{cases}
+    a = div_u(a,b) * b + r \\
+    b = r + k \\
+    a, r, b, k\in T_{64}, 
+\end{cases}
+\end{equation}
+When dealing with opcode that has more complicated mathematical semantics, we need a way to formally prove that the derived constraints represents the same semantic. In \zkwasm we uses Z3 to formally check that the mathematical definition is refined to the arithmetic circuits correctly.
+
+\subsection{Representing Dynamic State using Polynomial Lookup Tables}
+Given a program, suppose that the program is a sequence of state transition function $\{t_i\}$ and each transition might read or write finitely many key-value pairs in the state. Also suppose that each read or write of $\{t_i\}$ is ordered in a sequence $\{t_i^k\}$. We denote the access log $L_{tid}$ of $t_i^k$ to be a tuple of $(tid, accessType, address, value)$ such that each access log has the following semantic:
+\begin{itemize}
+    \item $(tid, init, addr, v ) := t_{tid}(s) := s.addr = v$
+    \item $(tid, write, addr, v) := t_{tid}(s) := s.addr = v$
+    \item $(tid, read, addr, v) := t_{tid}(s) := return \,\, s.addr$ and $t_{tid}(s) = v$
+\end{itemize}
+%Notice that the above definition has the following \emph{Reduction rule of read}.
+%    \[
+%    \begin{split}
+%    init(addr, v) \circ read(addr') = \lambda s, \begin{cases}
+%        v\,\, \textnormal{(if $addr == addr'$)} \\
+%        read(addr, s)\,\, \textnormal{(if $addr' \neq addr$)}
+%    \end{cases}\\
+%    write(addr, v) \circ read(addr') = \lambda s, \begin{cases}
+%        v\,\, \textnormal{(if $addr == addr'$)} \\
+%        read(addr, s)\,\, \textnormal{(if $addr' \neq addr$)}
+%    \end{cases}
+%    \end{split}
+%    \]
+We can group the log by their access address and represent the above properties into a arithmetic circuit as in Table \ref{tbl:rw-table}.
+\begin{table}[!h]
+\begin{center}
+\begin{tabular}{ | c | c | c | c | }
+  \hline
+  address & tid & accessType & value \\ 
+  \hline
+ $addr_1$ & $tid_1$ &  $acc_1$ & $v_1$ \\  
+ $addr_1$ & $tid_2$ &  $acc_2$ & $v_2$ \\
+  $addr_1$ & $tid_3$ &  $acc_3$ & $v_3$ \\  
+ \hline
+ $addr_2$ & $tid_4$ &  $acc_3$ & $v_4$ \\  
+ $addr_2$ & $tid_5$ & $acc_4$ & $v_5$ \\
+ \hline
+ $\cdots$ & $tid_k$ & $acc_k$ & $v_k$ \\
+ \hline
+\end{tabular}
+\caption{memory access table}
+\label{tbl:rw-table}
+\end{center}
+\end{table}
+
+\noindent Motivated by Table \ref{tbl:rw-table}, we can define a circuit with constraints of each row as follows (see Equation \ref{eq:rw-constraints}),
+\begin{equation}
+\label{eq:rw-constraints}
+\begin{split}
+    &r(cur).address \equiv r(next).address \rightarrow r(cur).tid \le r(next).tid \\
+    &r(cur).address  \le r(next.address) \\
+    &r(next).accessType \equiv read \rightarrow r(next).value \equiv r(cur).value \\
+    &r(cur).address \neq r(prev).address \rightarrow r(cur).accessType \equiv init
+\end{split}
+\end{equation}
+and then establish a one-to-one correspondence between a valid memory access log sequence and a table which satisfy Equation \ref{eq:rw-constraints}.
+\begin{theorem}
+\label{thm:one-one-rw-1}
+Give an valid memory access log ${L_i}$, then there exists a unique table satisfy the above constraints.
+\end{theorem}
+\begin{proof}
+\end{proof}
+\begin{theorem}
+\label{thm:one-one-rw-2}
+Give an access log table $T$ that satisfy \ref{eq:rw-constraints}, then there exists a unique valid memory access log sequence $L_i$ such that $L_i.tid = T_k.tid$ and length of $L_i$ is equal to the length of $T$.
+\end{theorem}
+\begin{proof}
+\end{proof}
+When implementing \zkwasm, we encodes the memory and stack changes into access log tables of memory (or stack) access logs table $T$ defined by Constraints \ref{eq:rw-constraints}. By doing so we can enforce the result $v$ of state read instructions $t_i.read(addr)$ by checking $(t_i, read, addr, v) \in T$.
+

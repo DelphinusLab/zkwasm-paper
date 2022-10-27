@@ -1,0 +1,206 @@
+\section{Instruction Circuits}
+Based on execution trace circuit in Section \ref{chp:architecture-circuits}, we define constraints $\mathbf{C}_{op}$ for each opcode $op$. Since the constraint defined on execution trace circuit will be applied on a row basis, and the ingredients of the constraints of each $op$ will span over multiple rows, we use notation $C(curr+k)$ to denote the $k$th cell in column $c$ followed by the current row.
+
+For example, suppose that we want to define the constraints of add instruction using the following layout
+
+\begin{table}[!h]
+\begin{center}
+\begin{tabular}{ | c | c | c | c | c | c | c | c | c | c | c | }
+  \hline
+  start & opcode & bit cell & state & aux & $address \in T_{I}$ & $sp \in T_\mathcal{F}$& u64 cell & extra \\ 
+  \hline
+   true & $add$ & $overflow$ & $tid$ & $nil$ & $iaddr_0$ & sp & $w_0$ & $nil$\\ 
+ \hline
+   0 & $readStack$ & $nil$ & $nil$ & $nil$ & $nil$ & $sp_0$ & $w_1$ & $nil$\\ 
+ \hline
+   0 & $readStack$ & $nil$ & $nil$ & $nil$ & $nil$ & $sp_1$ & $w_2$ & $nil$\\ 
+ \hline
+   0 & $writeStack$ & $nil$ & $nil$ & $nil$ & $nil$ & $sp_2$ & $w_3$ & $nil$\\ 
+ \hline
+   true & $otherop$ & -- & $tid+1$ & $nil$ & $iaddr_1$ & $sp'$ & $w_0'$ & $nil$\\
+ \hline
+\end{tabular}
+\caption{add circuit within execution trace circuit}
+\label{tbl:ex-table}
+\end{center}
+\end{table}
+\noindent where $w_1$, $w_2$ are get from the stack and $w_2$ is equal to the result of the add instruction which is pushed back to the stack.
+\begin{verbatim}
+def add:=
+    w0 = read(stack sp);
+    sp0 = sp-1;
+    w1 = read(stack sp0);
+    w2 = (w1 + w0) mod 2^64;
+    write(stack, sp0, w2);
+    FALLTHROUGH
+\end{verbatim}
+
+First, we know that by definition of add opcode, $w_0 = (w_1+w_2) \bmod 2^{64}$. Thus encode the $\bmod$ semantic into arithmetic constraint, we get that $w_0 + overflow \times 2^{64}= w_1 + w_2$. Second we enforce the stack operation are valid, that are $(stack, read, sp_0, tid, 0, w0) \in T_\mathcal{M}$, $(stack, read, sp_1, tid, 1, w1) \in T_\mathcal{M}$ and $(stack, write, sp_2, tid, 2, w2) \in T_\mathcal{M}$. Third, we need to constraint that the next instruction must follow $iaddr_0$ in address, therefore $iadd_1 = iaddr_0 + 1$. In the end we constraint the $sp$ column by $sp_0 + 1= sp$, $sp_1 + 1= sp_0$, $sp_2 = sp+1$ and $sp' = sp_2$. Put it all together, and replase variables using the notation of $columnName.(curr + k)$, we have
+\[
+    \mathbf{C_{add}} = \begin{cases}
+        &w.(curr) + bit.(curr) \times 2^{64} - w.(curr+1) + (w.curr + 2) = 0 \\
+        &Plookup(T_\mathcal{M}, (stack, read, sp.(curr), tid, 0, w0)) = 0 \\
+        &Plookup(T_\mathcal{M}, (stack, read, sp.(curr+1), tid, 1, w1)) = 0 \\
+        &Plookup(T_\mathcal{M}, (stack, write, sp.(curr), tid, 2, w2) = 0 \\
+        &iaddr.curr + 1 - iaddr.(curr + 4) = 0\\
+        &sp.curr + 1 - sp.(curr+1) = 0\\
+        &sp.(curr+4) - sp.(curr) - 1 = 0
+    \end{cases}
+\]
+Since constraints are applied on a row basis of a circuit. We need to make sure that $\mathbf{C}_{add}$ does not apply on rows that is not a start row of a instruction block or a block with other opcode. So a natural way to apply $\mathcal{C}_{add}$ only on necessary rows is to multiply $\mathbf{C}_{add}(curr)$ with $curr.start \times (curr.opcode == op)$ and the final constraint related to opcode add is $\overline{\mathbf{C}}_{add}(curr) := curr.start \times (curr.opcode == op) \times \mathbf{C}_{add}(curr) = 0$.
+
+After we constructed all the constraints $\mathcal{C}_{op_i}$ for all opcodes $op_i$, we simply sum them up and get the final constraint $\mathcal{C}_{op}(curr) := \sum_i cur.start \times (cur.opcode == op) \times \mathcal{C}_{op_i}(curr) = 0$.
+
+\subsection{Numeric Instructions}
+\label{chp:numeric-instruction}
+Numeric Instructions are the majority instructions in WASM. In general, semantics of numeric instructions contains three parts, parameters preparation, arithmetic calculation, result writeback and FALLTHROUGH as follows.
+\begin{verbatim}
+def arithop :=
+    param1 = read(stack sp); \\ parameters preparation
+    param2 = read(stack (sp-1)); \\ parameters preparation
+    ...
+    paramN = read(stack (sp-N+1)); \\ parameters preparation
+    result = arith(param1, param2, param3, ..., paramN); \\ calculation
+    write(stack, (sp-N+1), result); \\ result write back
+    sp = sp-N+1;
+    FALLTHROUGH;
+\end{verbatim}
+Based on the arithmetic defintion, we assign the cells in the execution trace circuit $T_\mathcal{E}$ in Table \ref{tbl:arith-instruction}.
+\begin{table}[!h]
+\begin{center}
+\begin{tabular}{ | c | c | c | c | c | c | c | c | c | c | c | }
+  \hline
+  start & opcode & bit cell & state & aux & $address \in T_{I}$ & $sp \in T_\mathcal{F}$& u64 cell & extra \\ 
+  \hline
+   true & $arithop$ & $nill$ & $tid$ & $nil$ & $iaddr_0$ & sp & $param_0$ & $nil$\\ 
+ \hline
+   0 & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $\cdots$ & $nil$\\ 
+ \hline
+   0 & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $param_N$ & $nil$\\ 
+ \hline
+   0 & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $result$ & $nil$\\ 
+ \hline
+    true & $otherop$ & -- & $tid+1$ & $nil$ & $iaddr_1$ & $sp'$ & $w_0'$ & $nil$\\
+ \hline
+\end{tabular}
+\caption{add circuit within execution trace circuit}
+\label{tbl:arith-instruction}
+\end{center}
+\end{table}
+Therefore, assume the constraint is applied on the first row of the instruction block and rewrite the constraint of arithop using the notation of $columnName.(curr+k)$ form, we get
+\[
+    \mathbf{C_{arith}} = \begin{cases}
+        &arith(w.(curr), w.(curr+1), ..., w.(curr+N-1)-w.(curr+N) = 0 \\
+        &Plookup(T_\mathcal{M}, (stack, read, sp.(curr)-k, tid, k, w.(curr+k)) = 0 \\
+        &Plookup(T_\mathcal{M}, (stack, write, sp'.(curr)-N+1, tid, N, w.(curr+N)) = 0 \\
+        &iaddr.curr + 1 - iaddr.(curr + 4) = 0\\
+        &sp.curr - sp' - N + 1 = 0\\
+    \end{cases}
+\]
+\subsection{Control Flow Instructions}
+In WASM specification, there three different type of control flow: FALLTHROUGH, branch, and call (return). Implementation of the FALLTHROUGH is already covered in Section \ref{chp:numeric-instruction}. Thus it is sufficient to implement call(return) and branch.
+
+\smallskip\noindent\emph{Call (Return) Circuit.}
+Call instruction will first add a new Frame Table Entry $(tid, frameId, iaddr_0)$ into the Frame Circuits $T_\mathcal{F}$ and then loading calling parameters onto the stack and goto the $iaddr_1$ for next instruction (see Table \ref{tbl:call-instruction} for the circuit layout of \emph{call}).
+\begin{table}[!h]
+\begin{center}
+\begin{tabular}{ | c | c | c | c | c | c | c | c | c | c | c | }
+  \hline
+  start & opcode & bit cell & state & aux & $address \in T_{I}$ & $sp \in T_\mathcal{F}$& u64 cell & extra \\ 
+  \hline
+   true & $call(iaddr_1)$ & $nill$ & $tid$ & $nil$ & $iaddr_0$ & sp & $w_0$ & $nil$\\ 
+ \hline
+   0 & $nil$ & $nil$ & $prevFrameId$ & $nil$ & $nil$ & $nil$ & $w_1$ & $nil$\\ 
+ \hline
+   0 & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $w_2$ & $nil$\\ 
+ \hline
+   0 & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $w_3$ & $nil$\\ 
+ \hline
+   true & $otherop$ & -- & $tid + 1$ & $nil$ & $iaddr_1$ & $sp'$ & $w_0'$ & $nil$\\
+ \hline
+   0 & $nil$ & $nil$ & $newFrameId = tid$ & $nil$ & $nil$ & $nil$ & $w_3$ & $nil$\\ 
+ \hline
+\end{tabular}
+\caption{circuit layout of call}
+\label{tbl:call-instruction}
+\end{center}
+\end{table}
+where the circuit constraint is:
+\[
+    C_{call} 
+\]
+
+ As we mentioned in Section \ref{chp:frame-circuits}, all the entries in $T_\mathcal{F}$ is used to help the return instruction to find the correct calling frame so that we can define the semantic of \emph{return} by finding the correct \emph{returnIaddr} in $T_\mathcal{F}$ (see Table \ref{tbl:return-instruction} for the circuit layout of \emph{return}).
+\begin{table}[!h]
+\begin{center}
+\begin{tabular}{ | c | c | c | c | c | c | c | c | c | c | c | }
+  \hline
+  start & opcode & bit cell & state & aux & $address \in T_{I}$ & $sp \in T_\mathcal{F}$& u64 cell & extra \\ 
+  \hline
+   true & $call(iaddr_1)$ & $nill$ & $tid$ & $nil$ & $iaddr_0$ & sp & $w_0$ & $nil$\\ 
+ \hline
+   0 & $nil$ & $nil$ & $prevFrameId$ & $nil$ & $nil$ & $nil$ & $w_1$ & $nil$\\ 
+ \hline
+   0 & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $w_2$ & $nil$\\ 
+ \hline
+   0 & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $w_3$ & $nil$\\ 
+ \hline
+   true & $otherop$ & -- & $tid + 1$ & $nil$ & $iaddr_1$ & $sp'$ & $w_0'$ & $nil$\\
+ \hline
+   0 & $nil$ & $nil$ & $newFrameId = tid$ & $nil$ & $nil$ & $nil$ & $w_3$ & $nil$\\ 
+ \hline
+\end{tabular}
+\caption{circuit layout of return}
+\label{tbl:return-instruction}
+\end{center}
+\end{table}
+\subsection{Local Set and Get Instructions}
+see Table \ref{tbl:local-setget-ins}
+\begin{table}[!h]
+\begin{center}
+\begin{tabular}{ | c | c | c | c | c | c | c | c | c | c | c | }
+  \hline
+  start & opcode & bit cell & state & aux & $address \in T_{I}$ & $sp \in T_\mathcal{F}$& u64 cell & extra \\ 
+  \hline
+   true & $call iaddr_1$ & $nill$ & $tid$ & $nil$ & $iaddr_0$ & sp & $w_0$ & $nil$\\ 
+ \hline
+   0 & $nil$ & $nil$ & $prevFrameId$ & $nil$ & $nil$ & $nil$ & $w_1$ & $nil$\\ 
+ \hline
+   0 & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $w_2$ & $nil$\\ 
+ \hline
+   0 & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $w_3$ & $nil$\\ 
+ \hline
+   true & $otherop$ & -- & $tid + 1$ & $nil$ & $iaddr_1$ & $sp'$ & $w_0'$ & $nil$\\
+ \hline
+   0 & $nil$ & $nil$ & $newFrameId = tid$ & $nil$ & $nil$ & $nil$ & $w_3$ & $nil$\\ 
+ \hline
+\end{tabular}
+\caption{add circuit within execution trace circuit}
+\label{tbl:local-setget-ins}
+\end{center}
+\end{table}
+\subsection{Conversion Instructions}
+see Table \ref{tbp:conversion-ins}
+\begin{table}[!h]
+\begin{center}
+\begin{tabular}{ | c | c | c | c | c | c | c | c | c | c | c | }
+  \hline
+  start & opcode & bit cell & state & aux & $address \in T_{I}$ & $sp \in T_\mathcal{F}$& u64 cell & extra \\ 
+  \hline
+   true & $call iaddr_1$ & $nill$ & $tid$ & $nil$ & $iaddr_0$ & sp & $w_0$ & $nil$\\ 
+ \hline
+   0 & $nil$ & $nil$ & $prevFrameId$ & $nil$ & $nil$ & $nil$ & $w_1$ & $nil$\\ 
+ \hline
+   0 & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $w_2$ & $nil$\\ 
+ \hline
+   0 & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $w_3$ & $nil$\\ 
+ \hline
+   true & $otherop$ & -- & $tid + 1$ & $nil$ & $iaddr_1$ & $sp'$ & $w_0'$ & $nil$\\
+ \hline
+   0 & $nil$ & $nil$ & $newFrameId = tid$ & $nil$ & $nil$ & $nil$ & $w_3$ & $nil$\\ 
+ \hline
+\end{tabular}
+\caption{add circuit within execution trace circuit}
+\label{tbl:conversion-ins}
+\end{center}
+\end{table}
