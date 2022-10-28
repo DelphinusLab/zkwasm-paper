@@ -91,12 +91,12 @@ We can group the log by their access address and represent the above properties 
 \noindent Motivated by Table \ref{tbl:rw-table}, we can define a circuit with constraints of each row as follows (see Equation \ref{eq:rw-constraints}),
 \begin{equation}
 \label{eq:rw-constraints}
-\begin{split}
+C(cur) = \begin{cases}
     &r(cur).address \equiv r(next).address \rightarrow r(cur).tid \le r(next).tid \\
     &r(cur).address  \le r(next.address) \\
     &r(next).accessType \equiv read \rightarrow r(next).value \equiv r(cur).value \\
     &r(cur).address \neq r(prev).address \rightarrow r(cur).accessType \equiv init
-\end{split}
+\end{cases}
 \end{equation}
 and then establish a one-to-one correspondence between a valid memory access log sequence and a table which satisfy Equation \ref{eq:rw-constraints}.
 \begin{theorem}
@@ -112,4 +112,3 @@ Give an access log table $T$ that satisfy \ref{eq:rw-constraints}, then there ex
 \begin{proof}
 \end{proof}
 When implementing \zkwasm, we encodes the memory and stack changes into access log tables of memory (or stack) access logs table $T$ defined by Constraints \ref{eq:rw-constraints}. By doing so we can enforce the result $v$ of state read instructions $t_i.read(addr)$ by checking $(t_i, read, addr, v) \in T$.
-

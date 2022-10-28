@@ -1,6 +1,6 @@
 \section{overview of \zkwasm Virtual Machine}
 \subsection{Workflow of \zkwasm}
-As a ZKSNARK virtual machine, \zkwasm\, takes in three inputs that is a WASM image $I$, its entry point $E$ and an $IO$ (stdin, stdout) firmware. After emulating the execution of $I$ start with $E$ under $IO::stdin$, \zkwasm\, generates $IO::stdout$ with a ZKSNARK proof which proves that $IO::stdout$ is a valid output (the execution enforces the semanitcs of WASM starndard).\\
+As a ZKSNARK virtual machine, \zkwasm\, takes in three inputs that is a WASM image $I$, its entry point $E$ and an $IO$ (stdin, stdout) firmware. After emulating the execution of $I$ start with $E$ under $IO::stdin$, \zkwasm\, generates $IO::stdout$ with a ZKSNARK proof which proves that $IO::stdout$ is a valid output (the execution enforces the semanitcs of WASM specification).\\
 
 \noindent\emph{Image Setup.}
 Defined by the WASM specification, a WASM image $I$ is divided into sections. Among them, there are sections that does not affects the execution of WASM (custom section, type section, export section, data count section) and sections that decides the execution semantic (data section, code section, module section). At image setup stage, we encode the code section into lookup table $T_\mathcal{I}$ and data section into lookup table $T_\mathcal{H}$. These two tables will be used to enforce that each instruction in the execution trace is a valid instruction and all the initialization of the memory access log table complies with the initial data section of image $I$.\\

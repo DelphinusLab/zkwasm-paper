@@ -1,9 +1,6 @@
 \section{Instruction Circuits}
-Based on execution trace circuit in Section \ref{chp:architecture-circuits}, we define constraints $\mathbf{C}_{op}$ for each opcode $op$. Since the constraint defined on execution trace circuit will be applied on a row basis, and the ingredients of the constraints of each $op$ will span over multiple rows, we use notation $C(curr+k)$ to denote the $k$th cell in column $c$ followed by the current row.
-
-For example, suppose that we want to define the constraints of add instruction using the following layout
-
-\begin{table}[!h]
+Based on execution trace circuit in Section \ref{chp:architecture-circuits}, we define constraints $\mathbf{C}_{op}$ for each opcode $op$. Since the constraint defined on execution trace circuit will be applied on a row basis, and the ingredients of the constraints of each $op$ will span over multiple rows, we use notation $C(curr+k)$ to denote the $k$th cell in column $c$ followed by the current row. For example, suppose that we want to define the constraints of add instruction using the following layout (see Figure \ref{tbl:add-instruction})
+\begin{table}[h]
 \begin{center}
 \begin{tabular}{ | c | c | c | c | c | c | c | c | c | c | c | }
   \hline
@@ -21,9 +18,10 @@ For example, suppose that we want to define the constraints of add instruction u
  \hline
 \end{tabular}
 \caption{add circuit within execution trace circuit}
-\label{tbl:ex-table}
+\label{tbl:add-instruction}
 \end{center}
 \end{table}
+
 \noindent where $w_1$, $w_2$ are get from the stack and $w_2$ is equal to the result of the add instruction which is pushed back to the stack.
 \begin{verbatim}
 def add:=
@@ -83,7 +81,7 @@ Based on the arithmetic defintion, we assign the cells in the execution trace ci
     true & $otherop$ & -- & $tid+1$ & $nil$ & $iaddr_1$ & $sp'$ & $w_0'$ & $nil$\\
  \hline
 \end{tabular}
-\caption{add circuit within execution trace circuit}
+\caption{add circuit in execution trace circuit}
 \label{tbl:arith-instruction}
 \end{center}
 \end{table}
@@ -108,99 +106,123 @@ Call instruction will first add a new Frame Table Entry $(tid, frameId, iaddr_0)
   \hline
   start & opcode & bit cell & state & aux & $address \in T_{I}$ & $sp \in T_\mathcal{F}$& u64 cell & extra \\ 
   \hline
-   true & $call(iaddr_1)$ & $nill$ & $tid$ & $nil$ & $iaddr_0$ & sp & $w_0$ & $nil$\\ 
+   true & $call(targetIaddr)$ & $nill$ & $tid$ & $nil$ & $iaddr_0$ & sp & $param_0$ & $nil$\\ 
  \hline
-   0 & $nil$ & $nil$ & $prevFrameId$ & $nil$ & $nil$ & $nil$ & $w_1$ & $nil$\\ 
+   0 & $nil$ & $nil$ & $pFrameId$ & $nil$ & $nil$ & $nil$ & $\cdots$ & $nil$\\ 
  \hline
-   0 & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $w_2$ & $nil$\\ 
+   0 & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $param_N$ & $nil$\\ 
  \hline
-   0 & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $w_3$ & $nil$\\ 
+   true & $otherop$ & -- & $tid + 1$ & $nil$ & $iaddr_1$ & $sp'$ & $nil$ & $nil$\\
  \hline
-   true & $otherop$ & -- & $tid + 1$ & $nil$ & $iaddr_1$ & $sp'$ & $w_0'$ & $nil$\\
- \hline
-   0 & $nil$ & $nil$ & $newFrameId = tid$ & $nil$ & $nil$ & $nil$ & $w_3$ & $nil$\\ 
+   0 & $nil$ & $nil$ & $nFrameId$ & $nil$ & $nil$ & $nil$ & $nil$ & $nil$\\ 
  \hline
 \end{tabular}
 \caption{circuit layout of call}
 \label{tbl:call-instruction}
 \end{center}
 \end{table}
-where the circuit constraint is:
+
+\noindent where the circuit constraint is:
 \[
-    C_{call} 
+    C_{call} = \begin{cases}
+        &Plookup(T_\mathcal{M}, (stack, write, sp+i, tid, i, param_i)) = 0 \\
+        &Plookup(T_\mathcal{F}, (tid, pFrameId, iaddr_0)) = 0 \\
+        &iaddr_1 - targetIaddr = 0\\
+        &sp' - sp - N = 0 \\
+        &nFrameId - tid = 0
+    \end{cases}
 \]
 
- As we mentioned in Section \ref{chp:frame-circuits}, all the entries in $T_\mathcal{F}$ is used to help the return instruction to find the correct calling frame so that we can define the semantic of \emph{return} by finding the correct \emph{returnIaddr} in $T_\mathcal{F}$ (see Table \ref{tbl:return-instruction} for the circuit layout of \emph{return}).
+ As we mentioned in Section \ref{chp:frame-circuit}, all the entries in $T_\mathcal{F}$ is used to help the return instruction to find the correct calling frame so that we can define the semantic of \emph{return} by finding the correct \emph{returnIaddr} in $T_\mathcal{F}$ (see Table \ref{tbl:return-instruction} for the circuit layout of \emph{return}).
 \begin{table}[!h]
 \begin{center}
 \begin{tabular}{ | c | c | c | c | c | c | c | c | c | c | c | }
   \hline
   start & opcode & bit cell & state & aux & $address \in T_{I}$ & $sp \in T_\mathcal{F}$& u64 cell & extra \\ 
   \hline
-   true & $call(iaddr_1)$ & $nill$ & $tid$ & $nil$ & $iaddr_0$ & sp & $w_0$ & $nil$\\ 
+   true & $return$ & $nill$ & $tid$ & $nil$ & $iaddr_0$ & sp & $nil$ & $nil$\\ 
  \hline
-   0 & $nil$ & $nil$ & $prevFrameId$ & $nil$ & $nil$ & $nil$ & $w_1$ & $nil$\\ 
+   0 & $nil$ & $nil$ & $prevFrameId$ & $nil$ & $nil$ & $nil$ & $nil$ & $nil$\\ 
  \hline
-   0 & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $w_2$ & $nil$\\ 
+   true & $otherop$ & -- & $tid + 1$ & $nil$ & $iaddr_1$ & $sp'$ & $nil$ & $nil$\\
  \hline
-   0 & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $w_3$ & $nil$\\ 
- \hline
-   true & $otherop$ & -- & $tid + 1$ & $nil$ & $iaddr_1$ & $sp'$ & $w_0'$ & $nil$\\
- \hline
-   0 & $nil$ & $nil$ & $newFrameId = tid$ & $nil$ & $nil$ & $nil$ & $w_3$ & $nil$\\ 
+   0 & $nil$ & $nil$ & $nFrameId$ & $nil$ & $nil$ & $nil$ & $nil$ & $nil$\\ 
  \hline
 \end{tabular}
 \caption{circuit layout of return}
 \label{tbl:return-instruction}
 \end{center}
 \end{table}
-\subsection{Local Set and Get Instructions}
-see Table \ref{tbl:local-setget-ins}
+
+\noindent and the circuit constraint is
+\[
+    C_{return} =  \begin{cases}
+        &Plookup(T_\mathcal{F}, (pFrameId, nFrameId iaddr_1 - 1)) = 0 \\
+        &sp' - sp = 0 \\
+    \end{cases}
+\]
+
+\smallskip\noindent\emph{Branch Circuit.}
+Branch instructions in WASM includes \emph{br}, \emph{br\_if}, \emph{if * then * else *}, etc. The semantics of branch instructions can be uniformly abstract as three steps. First, read related parameters from the stack. Seconde, calculate the target branch address according to the params. Third, branch to the target branch address.
+\begin{verbatim}
+def branchop :=
+    param1 = read(stack sp); \\ parameters preparation
+    param2 = read(stack (sp-1)); \\ parameters preparation
+    ...
+    paramN = read(stack (sp-N+1)); \\ parameters preparation
+    iaddr1 = select(param1, param2, ..., paramN); \\ calculate branch address
+    GOTO iaddr2;
+\end{verbatim}
+The circuit of branch instruction is in Table \ref{tbl:branch-instruction}
 \begin{table}[!h]
 \begin{center}
 \begin{tabular}{ | c | c | c | c | c | c | c | c | c | c | c | }
   \hline
   start & opcode & bit cell & state & aux & $address \in T_{I}$ & $sp \in T_\mathcal{F}$& u64 cell & extra \\ 
   \hline
-   true & $call iaddr_1$ & $nill$ & $tid$ & $nil$ & $iaddr_0$ & sp & $w_0$ & $nil$\\ 
+   true & $branchop$ & $nill$ & $tid$ & $nil$ & $iaddr_0$ & sp & $param_0$ & $nil$\\ 
  \hline
-   0 & $nil$ & $nil$ & $prevFrameId$ & $nil$ & $nil$ & $nil$ & $w_1$ & $nil$\\ 
+   0 & $nil$ & $nil$ & $pFrameId$ & $nil$ & $nil$ & $nil$ & $\cdots$ & $nil$\\ 
  \hline
-   0 & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $w_2$ & $nil$\\ 
+   0 & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $param_N$ & $nil$\\ 
  \hline
-   0 & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $w_3$ & $nil$\\ 
+   true & $otherop$ & -- & $tid + 1$ & $nil$ & $iaddr_1$ & $sp'$ & $nil$ & $nil$\\
  \hline
-   true & $otherop$ & -- & $tid + 1$ & $nil$ & $iaddr_1$ & $sp'$ & $w_0'$ & $nil$\\
- \hline
-   0 & $nil$ & $nil$ & $newFrameId = tid$ & $nil$ & $nil$ & $nil$ & $w_3$ & $nil$\\ 
+   0 & $nil$ & $nil$ & $nFrameId$ & $nil$ & $nil$ & $nil$ & $nil$ & $nil$\\ 
  \hline
 \end{tabular}
-\caption{add circuit within execution trace circuit}
-\label{tbl:local-setget-ins}
+\caption{circuit layout of call}
+\label{tbl:branch-instruction}
 \end{center}
 \end{table}
-\subsection{Conversion Instructions}
-see Table \ref{tbp:conversion-ins}
+
+\noindent and the circuit constraint is:
+\[
+    C_{call} = \begin{cases}
+        &Plookup(T_\mathcal{M}, (stack, write, sp+i, tid, i, param_i)) = 0 \\
+        &iaddr_1 - select(param_0, param_1, \cdots) = 0 \\
+        &nFrameId - pFrameId = 0
+    \end{cases}
+\]
+
+\subsection{Memory Instructions}
+Memory instructions can be abstract as a tuple of \emph{(type=READ|WRITE, address, size = 8|16|32|64, value)} thus the layout of the circuit is defined Table \ref{tbl:memory-instruction}. Also the constraint for memory circuit is simply $(type, tid, address, value') \in T_\mathcal{M} \wedge trunc(value', size) = value$. For read, this constraint ensures the result read from $address$ is valid. For write, $T_\mathcal{M}$ ensures that the next $read$ of $address$ will return the written value.
 \begin{table}[!h]
 \begin{center}
 \begin{tabular}{ | c | c | c | c | c | c | c | c | c | c | c | }
   \hline
   start & opcode & bit cell & state & aux & $address \in T_{I}$ & $sp \in T_\mathcal{F}$& u64 cell & extra \\ 
   \hline
-   true & $call iaddr_1$ & $nill$ & $tid$ & $nil$ & $iaddr_0$ & sp & $w_0$ & $nil$\\ 
+   true & $op(type, size)$ & $nill$ & $tid$ & $nil$ & $iaddr_0$ & sp & $address$ & $nil$\\ 
  \hline
-   0 & $nil$ & $nil$ & $prevFrameId$ & $nil$ & $nil$ & $nil$ & $w_1$ & $nil$\\ 
- \hline
-   0 & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $w_2$ & $nil$\\ 
- \hline
-   0 & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $nil$ & $w_3$ & $nil$\\ 
+   0 & $nil$ & $nil$ & $frameId$ & $nil$ & $nil$ & $nil$ & $value$ & $nil$\\ 
  \hline
    true & $otherop$ & -- & $tid + 1$ & $nil$ & $iaddr_1$ & $sp'$ & $w_0'$ & $nil$\\
  \hline
-   0 & $nil$ & $nil$ & $newFrameId = tid$ & $nil$ & $nil$ & $nil$ & $w_3$ & $nil$\\ 
+   0 & $nil$ & $nil$ & $frameId = tid$ & $nil$ & $nil$ & $nil$ & $w_3$ & $nil$\\ 
  \hline
 \end{tabular}
 \caption{add circuit within execution trace circuit}
-\label{tbl:conversion-ins}
+\label{tbl:memory-instruction}
 \end{center}
 \end{table}
