@@ -90,27 +90,25 @@ When writing execution trace into execution circuit, we arrange the instruction 
 \label{tbl:ex-table}
 \end{center}
 \end{table}
+
 Although different opcode might have different semantics thus different $mop_k$, $addr_i$, etc. There are some common constraint we need to enforce in the execution circuit.
 
 First. we need to enforce that each instruction exists in the code section, thus $(iaddr, opcode) \in T_\mathcal{C}$. Second, suppose that $operand$ $p_i$ is get from stack pointer $sp$ as a result of $mop_k(sp)$, then $(sp, read, iaddr, k, p_i) \in T_{\mathcal{M}}$, which means the result $p_i$ is enforced from a valid memory access log table. Similarly, suppose that witness $w_i$ is get from memory access of $addr_j$ with access type $ltype$ as a result of $mop_k$, then $(mem, addr_j, ltype, k, w_i) \in T_{\mathcal{M}}$.  Third, we enforce that all the cells in bit column are either zero or one and all the cells in u64 witness column and operand column are in $T_64$ (less than $2^{64}$).
 \subsection{Access Log Circuit}
-Recall that access log circuit is a unique table corresponding to a valid memory access log sequence and satisfies Equation \ref{eq:rw-constraints}. In WASM specification, access log is used for three different category that are memory access, stack access and global access. Each access log can be one of the three types: \emph{Init}, \emph{Read} or \emph{Write}. The access log is sorted by $(addres, (tid, tmid))$ where $address$ is indexed by $ (ltype, mmid, offset)$, $tid$ is the transition index of the execution log that contains the access and $tmid$ is the index of the access micro-op in that instruction.
-\label{tbl: rw-table}
+\label{chp:access-log-circuit}
+Recall that access log circuit is a unique table corresponding to a valid memory access log sequence and satisfies Equation \ref{eq:rw-constraints}. In WASM specification, access log is used for three different types that are memory access, stack access and global access. Each access log can be one of the three types: \emph{Init}, \emph{Read} or \emph{Write} and all logs are sorted by $(addres, (tid, tmid))$ where $address$ is indexed by $ (mmid, offset)$, $tid$ is the transition index of the execution log that contains the access and $tmid$ is the index of the access micro-op in that instruction.
+
 \begin{table}[!h]
 \begin{center}
 \begin{tabular}{ | c | c | c | c | c | c | c | c |}
   \hline
-  section & ltype & mmid & offset & tid & emid & enable & is64bit\\ 
+  section & ltype & mmid & offset & tid & emid & value\\ 
   \hline
-  memory & \emph{Init} | Read | Write & & & & & &\\
-  \hline
-  stack & \emph{Init} | Read | Write & & & & & &\\
-  \hline
-  global & \emph{Init} | Read | Write & & & & & &\\
+  memory | stack | global & \emph{Init} | Read | Write & & & & &\\
  \hline
 \end{tabular}
-\caption{execution table}
-\label{tbl:ex-table}
+\caption{access log circuit}
+\label{tbl: rw-circuit}
 \end{center}
 \end{table}
 
