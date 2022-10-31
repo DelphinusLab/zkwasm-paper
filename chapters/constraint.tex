@@ -1,8 +1,8 @@
 \section{Basic \zkwasm\, building blocks}
-As described in Section \ref{chp:encode-state-in-circuits}, arithmetic circuit is crucial in connecting program execution with SNARKS of polynomial evaluation. We use Halo2 proof system to constructing circuits for \zkwasm, therefore in this section we will give a brief of the Halo2 proof system and then introduce some basic techniques we use in \zkwasm.
+As described in Section \ref{chp:encode-state-in-circuits}, the arithmetic circuit is crucial in connecting program execution with SNARKS of polynomial evaluation. We use Halo2 proof system to construct circuits for \zkwasm\,.  Therefore in this section we will give a brief of the Halo2 proof system and then introduce some basic techniques we use in \zkwasm.
 \subsection{Brief of Halo2 Proof System}
 \label{chp:constraint-system}
-Halo2's arithmetic system is an extension of PLONK that supports custom arithmetic gates and polynomial lookup. Below we represents Halo's circuits by matrix of values with constraints on a row basis. Regarding a particular row (without loss of generality, we use $cur$ as the index of this particular row), we use the notation $r_i.(cur)$ to denote the cell of column $i$ in that row and use the notation $r_i.(cur + n)$ to denote the cell of $(k+n)$th row of column $i$. With this notation, we can define constraint system of a circuit matrix by equations of cells of each row and their siblings. For example, the circuit matrix of sum in Figure \ref{fig:sum-gates} can be constructed as follows.
+Halo2's arithmetic system is an extension of PLONK that supports custom arithmetic gates and polynomial lookups. Below we represent Halo's circuits by a matrix of values with constraints on a row basis. Regarding a particular row (without loss of generality, we use $cur$ as the index of this particular row), use the notation $r_i.(cur)$ to denote the cell of column $i$ in that row and use the notation $r_i.(cur + n)$ to denote the cell of $(k+n)$th row of column $i$. With this notation, we can define the constraint system of a circuit matrix by equations of cells of each row and their siblings. For example, the circuit matrix of sum in Figure \ref{fig:sum-gates} can be constructed as follows:
 
 \begin{table}[!h]
 \begin{center}
@@ -32,30 +32,30 @@ Halo2's arithmetic system is an extension of PLONK that supports custom arithmet
  \end{cases}
 \]
 \begin{remark}
-Notice that the first constraint makes sure that add gate (see Figure \ref{fig:sum-gates}) is applied to each row except the last row and the second constraint enforced that $s$ is either $1$ or $0$).
+Notice that the first constraint ensures that add gate (see Figure \ref{fig:sum-gates}) is applied to each row except for the last row, and the second constraint enforces that $s$ is either $1$ or $0$).
 \end{remark}
 
 \begin{definition}[Arithmetic Circuit]
-Arithmetic Circuit is a $n \times m$ matrix with $m$ columns and $n$ rows equipped with a constraint system $C$ that for each row $cur$ in the matrix $C(cur)$ holds.
+The arithmetic Circuit is a $n \times m$ matrix with $m$ columns and $n$ rows equipped with a constraint system $C$ that for each row $cur$ in the matrix $C(cur)$ holds.
 \end{definition}
 
-There are two ways to define constraint in constraint system $C$. One way is using polynomial equations of cells and the other is using polynomial lookup. Polynomial lookup is a special constraint that can enforce an expression $expr$ of cells belongs to an existing table $T$. More precisely we say $expr \in T$ if and only if $plookup(T, expr) = 0$. 
+There are two ways to define constraint in constraint system $C$. One way is using polynomial equations of cells and the other is using polynomial lookup. Polynomial lookup is a special constraint that can enforce an expression $expr$ of cells that belongs to an existing table $T$. More precisely we say $expr \in T$ if and only if $plookup(T, expr) = 0$. 
 
 %From a circuit description we can generate a proving key and a verification key, which are needed for the operations of proving and verification for that circuit.
 
 \subsection{Representing Basic types in Halo2 Constraint System}
-Recall that the polynomial commitment can prove a set of polynomials $p_i(x)$ has evaluation $v_i$ at $x_i$. To prove a arithmetic circuit matrix with constraint $C$ holds in Section \ref{chp:constraint-system}, the Plonkish proof system interpolates each column $c_i$ into polynomials $c_i(x)$ such that $c_i(j) = c_{ij}$ and then uses KCG commitment scheme to prove $\mathcal{C}(c_i(x)) = 0$ holds for all $x=1,2,3,\cdots$. 
+Recall that the polynomial commitment can prove a set of polynomials $p_i(x)$ has evaluation $v_i$ at $x_i$. To prove an arithmetic circuit matrix with constraint $C$ holds in Section \ref{chp:constraint-system}, the Plonkish proof system interpolates each column $c_i$ into polynomials $c_i(x)$ such that $c_i(j) = c_{ij}$ and then uses KCG commitment scheme to prove $\mathcal{C}(c_i(x)) = 0$ holds for all $x=1,2,3,\cdots$. 
 
-However, to use KZG commitment scheme on polynomial $c_i$, we require $c_i(x) \in F$ where $F$ is the scalar field of some elliptic curve $\mathbf{C}$, therefore each $c_i(j)$ is in the scalar field $\mathbf{F}$ of elliptic curve $\mathbf{C}$ in Halo2's arithmetic circuit system. However, since the basic types in webassembly is i64 and i32 which does not match the number field $\mathbf{F}$ in Halo2, we need to add a constraint $x<2^{32}$ (or $x< 2^{64}$) to represent a variable $x$ with type $i32$ or $i64$. In \zkwasm, we use $\mathbf{T_N}$ to denote a table contains elements from $0$ to $2^N-1$ and then we uses polynomial lookup to prove that all values of a column $c_i$ are less than $2^N-1$ by $plookup(\mathbf{T_N}, c_i(j)) = 0$. Sometimes $N$ is large (e.g. 64) and $\mathbf{T_N}$ becomes too big. In such scenario we will decompose a i64 into several parts and prove that each parts are less then $2^8-1$. Below we use the notation $x \in \mathbf{T_N}$ to denote $x < 2^N$ and omit the details of decompose $x$ into small pieces when necessary.
+However, to use KZG commitment scheme on polynomial $c_i$, we require $c_i(x) \in F$ where $F$ is the scalar field of some elliptic curve $\mathbf{C}$. Therefore each $c_i(j)$ is in the scalar field $\mathbf{F}$ of elliptic curve $\mathbf{C}$ in Halo2's arithmetic circuit system. However, since the basic types in WebAssembly are i64 and i32 which do not match the number field $\mathbf{F}$ in Halo2, we need to add a constraint $x<2^{32}$ (or $x< 2^{64}$) to represent a variable $x$ with type $i32$ or $i64$. In \zkwasm, we use $\mathbf{T_N}$ to denote a table containing elements from $0$ to $2^N-1$ and then we use a polynomial lookup to prove that all values of a column $c_i$ are less than $2^N-1$ by $plookup(\mathbf{T_N}, c_i(j)) = 0$. Sometimes $N$ is large (e.g. 64) and $\mathbf{T_N}$ becomes too big. In such scenario we will decompose an i64 into several parts and prove that each part is less then $2^8-1$. Below we use the notation $x \in \mathbf{T_N}$ to denote $x < 2^N$ and omit the details of decomposing $x$ into small pieces when necessary.
 
 \subsection{Representing Map using Polynomial Lookup of Tables}
 \label{chp:map-repr}
-Other than specifying range of columns, another usage of polynomial lookup is that we can encode state of key-value map into tables and using polynomial lookup to specify the semantics of getting a value of a certain key in a map. 
+Other than specifying a range of columns, another usage of polynomial lookup is that we can encode the state of key-value map into tables and use polynomial lookup to specify the semantics of getting a value of a certain key in a map. 
 
-Here is an example. Recall that we represent state of \zkwasm\, by \fullstate \, where $\mathcal{C}$ and $\mathcal{H}$ are fixed by the WASM image. We encode state $\mathcal{C}$ and $\mathcal{H}$ in tables $\mathbf{T}_\mathcal{C} : Addr \times Opcode$ and $\mathbf{T}_\mathcal{H}: Addr \times U64$. Therefore we can use the polynomial lookup to specify the semantic of getting opcode $op$ at address $addr$ in $\mathcal{C}$ by $(addr, op) \in \mathbf{T}_\mathcal{C}$ and specify the semantic of WASM of getting the initial byte data $v$ at address $addr$ in $\mathcal{H}$ by $\exists d, (d, addr \div 8) \in \mathbf{T}_\mathcal{H} \wedge v = (d \gg (addr \% 8)) \% 256$.
+Here is an example. Recall that we represent the state of \zkwasm\, by \fullstate \, where $\mathcal{C}$ and $\mathcal{H}$ are fixed by the WASM image. We encode state $\mathcal{C}$ and $\mathcal{H}$ in tables $\mathbf{T}_\mathcal{C} : Addr \times Opcode$ and $\mathbf{T}_\mathcal{H}: Addr \times U64$. Therefore we can use the polynomial lookup to specify the semantic of getting opcode $op$ at address $addr$ in $\mathcal{C}$ by $(addr, op) \in \mathbf{T}_\mathcal{C}$ and specify the semantic of WASM of getting the initial byte data $v$ at address $addr$ in $\mathcal{H}$ by $\exists d, (d, addr \div 8) \in \mathbf{T}_\mathcal{H} \wedge v = (d \gg (addr \% 8)) \% 256$.
 
 \subsection{Representing Math Semantic as Arithmetic Circuits}
-According to the WASM specification, the semantic of opcodes are usually defined as mathematical equations and state transformation. When implementing \zkwasm \, we need to construct arithmetic circuits in Halo2 such that the semantic of the opcodes are enforced. For example, suppose that the opcode $div_u$ (division of unsigned int) has the following semantic:
+According to the WASM specification, the semantics of opcodes are usually defined as mathematical equations and state transformation. When implementing \zkwasm \, we need to construct arithmetic circuits in Halo2 such that the semantics of the opcodes are enforced. For example, suppose that the opcode $div_u$ (a division of unsigned int) has the following semantics:
 \[ div_u(a, b) = (a - a \bmod b) \div b \] 
 Then it follows that to write the above mathematical definition into polynomial constraints we need to introduce intermediate witness $r$ such that the above semantics can be rewritten as follows:
 \begin{equation}
@@ -64,7 +64,7 @@ Then it follows that to write the above mathematical definition into polynomial 
     r < b
 \end{cases}
 \end{equation}
-However, since $r$ and $b$ are in $\mathbf{F}$, it needs more work to represent $r < b$ in to polynomial constraints. Fortunately, in \zkwasm, we uses range check to constraint $r$ and $b$ within 64 bits, the above constraints can be further rewritten into the following polynomial constraints with one more extra witness $k$: 
+However, since $r$ and $b$ are in $\mathbf{F}$, it needs more work to represent $r < b$ into polynomial constraints. Fortunately, in \zkwasm, we use range check to constraint $r$ and $b$ within 64 bits. The above constraints can be further rewritten into the following polynomial constraints with one more extra witness $k$: 
 \begin{equation}
 \begin{cases}
     a = div_u(a,b) * b + r \\
@@ -72,7 +72,7 @@ However, since $r$ and $b$ are in $\mathbf{F}$, it needs more work to represent 
     a, r, b, k\in T_{64}, 
 \end{cases}
 \end{equation}
-When dealing with opcode that has more complicated mathematical semantics, we need a way to formally prove that the derived constraints represents the same semantic. In \zkwasm, we uses Z3 to formally check that the mathematical definition is refined to the arithmetic circuits correctly.
+When dealing with opcode that has more complicated mathematical semantics, we need a way to formally prove that the derived constraints represent the same semantic. In \zkwasm, we use Z3 to formally check that the mathematical definition is correctly refined to the arithmetic circuits.
 
 \subsection{Representing Dynamic State using Polynomial Lookup Tables}
 Given a program, suppose that the program is a sequence of state transition function $\{t_i\}$ and each transition might read or write finitely many key-value pairs in the state. Also suppose that each read or write of $\{t_i\}$ is ordered in a sequence $\{t_i^k\}$. We denote the access log $L_{tid}$ of $t_i^k$ to be a tuple of $(tid, accessType, address, value)$ such that each access log has the following semantic:
@@ -94,7 +94,7 @@ Given a program, suppose that the program is a sequence of state transition func
 %    \end{cases}
 %    \end{split}
 %    \]
-We can group the log by their access address and represent the above properties into a arithmetic circuit as in Table \ref{tbl:rw-table}.
+We can group the log by their access addresses and represent the above properties into an arithmetic circuit as in Table \ref{tbl:rw-table}.
 \begin{table}[!h]
 \begin{center}
 \begin{tabular}{ | c | c | c | c | }
@@ -126,10 +126,10 @@ We can group the log by their access address and represent the above properties 
     &r(cur).address \neq r(prev).address \rightarrow r(cur).accessType \equiv init
 \end{split}
 \end{equation}
-and then establish a one-to-one correspondence between a valid memory access log sequence and a table which satisfy Equation \ref{eq:rw-constraints}.
+and then establish a one-to-one correspondence between a valid memory access log sequence and a table that satisfy Equation \ref{eq:rw-constraints}.
 \begin{theorem}
 \label{thm:one-one-rw-1}
-Give an valid memory access log ${L_i}$, then there exists a unique table satisfy the above constraints.
+Give an valid memory access log ${L_i}$, then there exists a unique table satisfying the above constraints.
 \end{theorem}
 \begin{proof}
 \end{proof}
@@ -139,5 +139,5 @@ Give an access log table $T$ that satisfy \ref{eq:rw-constraints}, then there ex
 \end{theorem}
 \begin{proof}
 \end{proof}
-When implementing \zkwasm, we encodes the memory and stack changes into access log tables of memory (or stack) access logs table $T$ defined by Constraints \ref{eq:rw-constraints}. By doing so we can enforce the result $v$ of state read instructions $t_i.read(addr)$ by checking $(t_i, read, addr, v) \in T$.
+When implementing \zkwasm, we encode the memory and stack changes into access log tables of memory (or stack) access logs table $T$ defined by Constraints \ref{eq:rw-constraints}. By doing so we can enforce the result $v$ of state read instructions $t_i.read(addr)$ by checking $(t_i, read, addr, v) \in T$.
 
