@@ -1,14 +1,16 @@
-\section{Customized Instruction Extension}
+\subsection{Customized Instruction Extension}
 \label{chp:foreign}
-Just like architecture specific instructions in normal hardware, \zkwasm\, supports customizing foreign instruction extensions as well. More specifically, \zkwasm\, provides two ways to extend the instructions set. One way is implementing customized inline opcodes and the other is batching external proofs of pure functions.
+Given a fixed image, an entry function and an array of input arguments, the execution trace is then decided which means the number of instructions is fixed. As described in Section \ref{chp:ex-table}, each instruction occupies $n$ (a fixed number of) rows in the execution circuit $\mathbf{T}_\mathcal{E}$. Thus the total rows of $\mathbf{T}_\mathcal{E}$ are fixed. When doing proof in Halo2 using KZG commitment, each column is interpolated into polynomials using FFT (fast fourier transform). Because FFT is an algorithm of $NlogN$ complexity, the total rows of $T_\mathcal{E}$ affect the overall performance in a nonlinear way. Thus to reduce the number of columns, a good way is to compress multiple instructions into one.\\
 
-Given a fixed image, an entry function and an array of input arguments, the execution trace is fixed which means the number of instructions is fixed. As described in Section \ref{chp:ex-table}, each instruction occupies $n$ (a fixed number of) rows in the execution circuit $T_\mathcal{E}$. Thus the total rows of $T_\mathcal{E}$ are fixed. When doing proof in Halo2 using KZG commitment, each column is interpolated into polynomials using FFT (fast fourier transform). Because FFT is an algorithm of $NlogN$ complexity, the total rows of $T_\mathcal{E}$ affect the overall performance in a nonlinear way. Thus to reduce the number of columns, a good way is to batch multiple instructions into one.
+\zkwasm\, supports two ways of customizing foreign instructions for the purpose of compressing. One is implementing customized inline opcodes and the other is using external proofs of specific foreign functions.\\
 
-When the semantics of instructions we would like to batch is simple and can fit into one instruction block, we can use the inline extension. For example, suppose that we want to sum the lowest 4 bits $x:u64$ by function $sumLowest(x)$. If we use a standard loop to implement the algorithm, it will take $4$ instructions to extract $4$ bits and another $2$ to do the sum. However, if we inline this function into a foreign function, then we can encode the arithmetic constraint within one instruction block. As a case study, we compare the SHA256 execution trace with and without inline the following macro:
+\noindent\emph{Compress using customized inline instruction.} When the semantics of instructions we would like to compress is simple and can fit into one instruction block, we can use the inline extension. For example, suppose that we want to sum the lowest 4 bits $x:u64$ by function $sumLowest(x)$. If we use a standard loop to implement the algorithm, it will take $4$ instructions to extract $4$ bits and another $2$ to do the sum. However, if we inline this function into a customized inline instruction, then we can encode the arithmetic constraint within one instruction block. As a case study, we compare the SHA256 execution trace with and without inline instructions in Table \ref{tbl:foreign-instruction-reduce}.
 
 \begin{table}[!h]
 \small
 \begin{center}
+\caption{Row reduce by using customized instructions}
+\label{tbl:foreign-instruction-reduce}
 \begin{tabular}{ | c | p{1cm} | c | p{1.5cm} | }
   \hline
   original & original rows & customized & optimized rows\\ 
@@ -21,11 +23,13 @@ When the semantics of instructions we would like to batch is simple and can fit 
   \hline
   $\lambda x, rotr_{32}(x, 6) | rotr_{32}(x, 11) | rotr_{32}(x, 25)$ & 5 & $lsigma1(x)$ & 1\\
  \hline
-   sha256 using pure WASM instructions & 1 & sha256 using customized instructions & XXX\\
- \hline
+%   sha256 using pure WASM instructions & 1 & sha256 using customized instructions & XXX\\
+% \hline
 \end{tabular}
-\caption{row reduce by using customized instructions}
-\label{tbl:memory-instruction}
+
 \end{center}
 \end{table}
 
+\smallskip\noindent\emph{Compress using customized foreign functions.}
+When the semantics of instructions we would like to compress is too complex to fit into one instruction block and the semantic of these instructions can be abstracted into a pure function then we can using foreign functions to compressing the execution trace. 
+A foreign function $f$ in \zkwasm\, is a special purpose circuit that can be used to constraint that the input and output of $f$ is valid. Although foreign calls saves the size of it will introduce extra costs when more circuits are added.

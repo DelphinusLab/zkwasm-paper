@@ -1,24 +1,4 @@
-\section{overview of \zkwasm Virtual Machine}
-\subsection{Workflow of \zkwasm}
-As a ZKSNARK virtual machine, \zkwasm\, takes in three inputs that are a WASM image $I$, its entry point $E$ and an $IO$ (stdin, stdout) firmware. After emulating the execution of $I$ start with $E$ under $IO::stdin$, \zkwasm\, generates $IO::stdout$ with a ZKSNARK proof which proves that $IO::stdout$ is a valid output (the execution enforces the semantics of WASM specification).\\
 
-\noindent\emph{Image Setup.}
-Defined by the WASM specification, a WASM image $I$ is divided into sections. Among them, there are sections that do not affect the execution of WASM (custom section, type section, export section, data count section) and sections that decide the execution semantics (data section, code section, module section). At the image setup stage, we encode the code section into lookup table $T_\mathcal{I}$ and data section into the lookup table $T_\mathcal{H}$. These two tables will be used to enforce that each instruction in the execution trace is a valid instruction and that all the initialization of the memory access log table complies with the initial data section of image $I$.\\
-
-\noindent\emph{Generate the Execution Trace.}
-An execution trace is a list of execution log $L_i$ that each $L_i$ is an execution log of of the $i$th instruction during the execution of $(I, E, IO)$. We say an execution trace is valid if each $L_i$ is derived from the semantic of its previous instruction $I_{i-1}$, the current instruction $I_{i}$ and the current state \fullstate.\\
-
-\noindent\emph{Synthesis Circuit.}
-Once a valid execution trace is generated, it can be used to fill our main execution circuit $\mathcal{T}$, together with three lookup tables $T_\mathcal{F}$ (calling frame table), $T_\mathcal{M}$ (memory access log table) and $T_{\mathcal{S}_p}$ (stack access log table). \\
-
-\noindent\emph{Generate ZK Proof.}
-After all the circuits are synthesised, we can generate a ZKSNARK proof via Halo2's proof system. The proof can be used to prove that the execution trace and its output are valid.
-
-\subsection{Runtime Architecture of \zkwasm}
-\noindent\emph{Compiler}
-\noindent\emph{Wasmi}
-\noindent\emph{Synthesizer}
-\noindent\emph{Prover}
 %\noindent\emph{verification}
 
 %The aim of any proof system is to be able to prove interesting mathematical or cryptographic statements.

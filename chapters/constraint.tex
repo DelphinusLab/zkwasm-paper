@@ -1,61 +1,23 @@
-\section{Basic \zkwasm\, building blocks}
-As described in Section \ref{chp:encode-state-in-circuits}, the arithmetic circuit is crucial in connecting program execution with SNARKS of polynomial evaluation. We use Halo2 proof system to construct circuits for \zkwasm\,.  Therefore in this section we will give a brief of the Halo2 proof system and then introduce some basic techniques we use in \zkwasm.
-\subsection{Brief of Halo2 Proof System}
-\label{chp:constraint-system}
-Halo2's arithmetic system is an extension of PLONK that supports custom arithmetic gates and polynomial lookups. Below we represent Halo's circuits by a matrix of values with constraints on a row basis. Regarding a particular row (without loss of generality, we use $cur$ as the index of this particular row), use the notation $r_i.(cur)$ to denote the cell of column $i$ in that row and use the notation $r_i.(cur + n)$ to denote the cell of $(k+n)$th row of column $i$. With this notation, we can define the constraint system of a circuit matrix by equations of cells of each row and their siblings. For example, the circuit matrix of sum in Figure \ref{fig:sum-gates} can be constructed as follows:
+\section{Basic building blocks of \zkwasm circuits}
+\label{chp:build-blocks}
+As described in Section \ref{chp:encode-state-in-circuits}, the arithmetic circuit of execution trace is crucial in constructing SNARKS of WASM virtual machine. In this section we will give a brief of some basic techniques and elementary circuits used to construct our final arithmetic circuits in \zkwasm.
 
-\begin{table}[!h]
-\begin{center}
-\begin{tabular}{ | c | c | c |}
-  \hline
-  s & acc & operand \\ 
-  \hline
- 1 & $sum_0 = 0$ & $v_0$\\
- \hline
- 1 & $sum_1$ & $v_1$\\
- \hline
- 1 & $\cdots$ & $\cdots$\\
- \hline
- 0 & $sum_k$ & $nill$\\
- \hline
-\end{tabular}
-\caption{circuit matrix of sum}
-\label{tbl:sum-table}
-\end{center}
-\end{table}
-
-\noindent while the constraint system enforced on each row is
-\[
- C(cur) = \begin{cases}
-     &s.(cur) \times (acc.(cur) + operand.(cur) - acc.(cur+1)) = 0 \\
-     &s.(cur) \times (1-s.(cur)) = 0
- \end{cases}
-\]
-\begin{remark}
-Notice that the first constraint ensures that add gate (see Figure \ref{fig:sum-gates}) is applied to each row except for the last row, and the second constraint enforces that $s$ is either $1$ or $0$).
-\end{remark}
-
-\begin{definition}[Arithmetic Circuit]
-The arithmetic Circuit is a $n \times m$ matrix with $m$ columns and $n$ rows equipped with a constraint system $C$ that for each row $cur$ in the matrix $C(cur)$ holds.
-\end{definition}
-
-There are two ways to define constraint in constraint system $C$. One way is using polynomial equations of cells and the other is using polynomial lookup. Polynomial lookup is a special constraint that can enforce an expression $expr$ of cells that belongs to an existing table $T$. More precisely we say $expr \in T$ if and only if $plookup(T, expr) = 0$. 
 
 %From a circuit description we can generate a proving key and a verification key, which are needed for the operations of proving and verification for that circuit.
 
-\subsection{Representing Basic types in Halo2 Constraint System}
-Recall that the polynomial commitment can prove a set of polynomials $p_i(x)$ has evaluation $v_i$ at $x_i$. To prove an arithmetic circuit matrix with constraint $C$ holds in Section \ref{chp:constraint-system}, the Plonkish proof system interpolates each column $c_i$ into polynomials $c_i(x)$ such that $c_i(j) = c_{ij}$ and then uses KCG commitment scheme to prove $\mathcal{C}(c_i(x)) = 0$ holds for all $x=1,2,3,\cdots$. 
+\subsection{Representing Basic Types in Halo2 Constraint System}
+Recall that to prove an arithmetic circuit matrix with constraint $\mathbf{C}$ holds the Plonkish proof system interpolates each column $c_i$ into polynomials $c_i(x)$ such that $c_i(j) = c_{ij}$ and then uses KCG commitment scheme to prove $\mathcal{C}(c_i(x)) = 0$ holds for all $x=1,2,3,\cdots$. 
 
-However, to use KZG commitment scheme on polynomial $c_i$, we require $c_i(x) \in F$ where $F$ is the scalar field of some elliptic curve $\mathbf{C}$. Therefore each $c_i(j)$ is in the scalar field $\mathbf{F}$ of elliptic curve $\mathbf{C}$ in Halo2's arithmetic circuit system. However, since the basic types in WebAssembly are i64 and i32 which do not match the number field $\mathbf{F}$ in Halo2, we need to add a constraint $x<2^{32}$ (or $x< 2^{64}$) to represent a variable $x$ with type $i32$ or $i64$. In \zkwasm, we use $\mathbf{T_N}$ to denote a table containing elements from $0$ to $2^N-1$ and then we use a polynomial lookup to prove that all values of a column $c_i$ are less than $2^N-1$ by $plookup(\mathbf{T_N}, c_i(j)) = 0$. Sometimes $N$ is large (e.g. 64) and $\mathbf{T_N}$ becomes too big. In such scenario we will decompose an i64 into several parts and prove that each part is less then $2^8-1$. Below we use the notation $x \in \mathbf{T_N}$ to denote $x < 2^N$ and omit the details of decomposing $x$ into small pieces when necessary.
+However, to use KZG commitment scheme on polynomial $c_i$, we require $c_i(x) \in \mathbf{F}$ where $\mathbf{F}$ is the scalar field of some elliptic curve $\mathbf{C}$. Therefore each $c_i(j)$ is in the scalar field $\mathbf{F}$ of the elliptic curve $\mathbf{C}$ in Halo2's arithmetic circuit system. Since the basic types in WebAssembly are i64 and i32 which do not match the number field $\mathbf{F}$ in Halo2, we need to add a constraint $x<2^{32}$ (or $x< 2^{64}$) to represent a variable $x$ with type $i32$ or $i64$. In \zkwasm, we use $\mathbf{T_N}$ to denote a table containing elements from $0$ to $2^N-1$ and then we use a polynomial lookup to prove that values of some column $c_i$ are less than $2^N-1$ by $plookup(\mathbf{T_N}, c_i(j)) = 0$. When $N$ is large (e.g. 64) and $\mathbf{T_N}$ becomes too big, we will decompose an i64 into several parts and prove that each part is less then $2^8-1$. Below we use the notation $x \in \mathbf{T_N}$ to denote $x < 2^N$ and omit the details of decomposing $x$ into small pieces when necessary.
 
-\subsection{Representing Map using Polynomial Lookup of Tables}
+\subsection{Representing Map Using Polynomial Lookup of Tables}
 \label{chp:map-repr}
-Other than specifying a range of columns, another usage of polynomial lookup is that we can encode the state of key-value map into tables and use polynomial lookup to specify the semantics of getting a value of a certain key in a map. 
+Other than specifying a range for cells, another usage of polynomial lookup is that we can encode the state of key-value map into tables and use polynomial lookup to specify the semantics of getting a value of a certain key in a map. 
 
-Here is an example. Recall that we represent the state of \zkwasm\, by \fullstate \, where $\mathcal{C}$ and $\mathcal{H}$ are fixed by the WASM image. We encode state $\mathcal{C}$ and $\mathcal{H}$ in tables $\mathbf{T}_\mathcal{C} : Addr \times Opcode$ and $\mathbf{T}_\mathcal{H}: Addr \times U64$. Therefore we can use the polynomial lookup to specify the semantic of getting opcode $op$ at address $addr$ in $\mathcal{C}$ by $(addr, op) \in \mathbf{T}_\mathcal{C}$ and specify the semantic of WASM of getting the initial byte data $v$ at address $addr$ in $\mathcal{H}$ by $\exists d, (d, addr \div 8) \in \mathbf{T}_\mathcal{H} \wedge v = (d \gg (addr \% 8)) \% 256$.
+Here is an example. Recall that we represent the state of \zkwasm\, by \fullstate \, where $\mathcal{C}$ and $\mathcal{H}$ are fixed by the WASM image. We encode state $\mathcal{C}$ and $\mathcal{H}$ in tables $\mathbf{T}_\mathcal{C} : Address \times Opcode$ and $\mathbf{T}_\mathcal{H}: Address \times U64$. By doing this, we can use the polynomial lookup to specify the semantic of getting opcode $op$ at address $addr$ in $\mathcal{C}$ by $(iaddr, op) \in \mathbf{T}_\mathcal{C}$ and specify the semantic of WASM of getting the initial byte data $v$ at address $addr$ in $\mathcal{H}$ by $(d, addr) \in \mathbf{T}_\mathcal{H}$.
 
 \subsection{Representing Math Semantic as Arithmetic Circuits}
-According to the WASM specification, the semantics of opcodes are usually defined as mathematical equations and state transformation. When implementing \zkwasm \, we need to construct arithmetic circuits in Halo2 such that the semantics of the opcodes are enforced. For example, suppose that the opcode $div_u$ (a division of unsigned int) has the following semantics:
+According to the WASM specification, the semantics of opcodes are usually defined as mathematical equations and state transformation. Thus we need to construct arithmetic circuits to enforce the semantics of the opcodes. For example, suppose that the opcode $div_u$ (a division of unsigned int) has the following semantics:
 \[ div_u(a, b) = (a - a \bmod b) \div b \] 
 Then it follows that to write the above mathematical definition into polynomial constraints we need to introduce intermediate witness $r$ such that the above semantics can be rewritten as follows:
 \begin{equation}
@@ -74,32 +36,22 @@ However, since $r$ and $b$ are in $\mathbf{F}$, it needs more work to represent 
 \end{equation}
 When dealing with opcode that has more complicated mathematical semantics, we need a way to formally prove that the derived constraints represent the same semantic. In \zkwasm, we use Z3 to formally check that the mathematical definition is correctly refined to the arithmetic circuits.
 
-\subsection{Representing Dynamic State using Polynomial Lookup Tables}
-Given a program, suppose that the program is a sequence of state transition function $\{t_i\}$ and each transition might read or write finitely many key-value pairs in the state. Also suppose that each read or write of $\{t_i\}$ is ordered in a sequence $\{t_i^k\}$. We denote the access log $L_{tid}$ of $t_i^k$ to be a tuple of $(tid, accessType, address, value)$ such that each access log has the following semantic:
+\subsection{Enforce Valid Dynamic State Accessing using Polynomial Lookup Tables}
+Given a sequence of state transition function $\{t_i\}$ such that each transition might read or write finitely many key-value pairs (e.g. access memory $\mathcal{M}$, stack $\mathcal{SP}$ or global $\mathcal{G}$) in the state $\mathcal{S}$. We label each read or write of $\{t_i\}$ in a sub sequence $\{t_i^k\}$ and use the tuple $(tid=i, mid=k, accessType, address, value)$ to denote the access log of $\{t_i^k\}$ such that each access log has the following semantic:
 \begin{itemize}
-    \item $(tid, init, addr, v ) := t_{tid}(s) := s.addr = v$
-    \item $(tid, write, addr, v) := t_{tid}(s) := s.addr = v$
-    \item $(tid, read, addr, v) := t_{tid}(s) := return \,\, s.addr$ and $t_{tid}(s) = v$
+    \item Init memory: $(tid, mid, init, addr, v ) := \{ s.addr = v; \}$
+    \item Write value $v$ to memory: $(tid, mid, write, addr, v) := \{ s.addr = v; \}$
+    \item Read from memory: $(tid, mid, read, addr, v) := \{assert(s.addr \equiv v);\}$
 \end{itemize}
-%Notice that the above definition has the following \emph{Reduction rule of read}.
-%    \[
-%    \begin{split}
-%    init(addr, v) \circ read(addr') = \lambda s, \begin{cases}
-%        v\,\, \textnormal{(if $addr == addr'$)} \\
-%        read(addr, s)\,\, \textnormal{(if $addr' \neq addr$)}
-%    \end{cases}\\
-%    write(addr, v) \circ read(addr') = \lambda s, \begin{cases}
-%        v\,\, \textnormal{(if $addr == addr'$)} \\
-%        read(addr, s)\,\, \textnormal{(if $addr' \neq addr$)}
-%    \end{cases}
-%    \end{split}
-%    \]
-We can group the log by their access addresses and represent the above properties into an arithmetic circuit as in Table \ref{tbl:rw-table}.
+
+As the address in $t_i^k$ can be randomly distributed which makes it hard to reason about the fact that a read from a address $addr$ should get the value $v$ that related to the latest write or init of that $addr$. To solve this, we do the following. First, we create a lookup table $\mathbf{T}$ by rearranging the log by their access address and order them by (tid, mid) within each address block (see Table \ref{tbl:rw-table}).
 \begin{table}[!h]
 \begin{center}
+\caption{Memory access table}
+\label{tbl:rw-table}
 \begin{tabular}{ | c | c | c | c | }
   \hline
-  address & tid & accessType & value \\ 
+  address & id = (tid, mid) & accessType & value \\ 
   \hline
  $addr_1$ & $tid_1$ &  $acc_1$ & $v_1$ \\  
  $addr_1$ & $tid_2$ &  $acc_2$ & $v_2$ \\
@@ -111,33 +63,31 @@ We can group the log by their access addresses and represent the above propertie
  $\cdots$ & $tid_k$ & $acc_k$ & $v_k$ \\
  \hline
 \end{tabular}
-\caption{memory access table}
-\label{tbl:rw-table}
+
 \end{center}
 \end{table}
 
-\noindent Motivated by Table \ref{tbl:rw-table}, we can define a circuit with constraints of each row as follows (see Equation \ref{eq:rw-constraints}),
+\noindent Second, we enforce the semantic of init, read and write by equip Table \ref{tbl:rw-table} with constraints of each row using Equation \ref{eq:rw-constraints}.
 \begin{equation}
 \label{eq:rw-constraints}
-\begin{split}
-    &r(cur).address \equiv r(next).address \rightarrow r(cur).tid \le r(next).tid \\
-    &r(cur).address  \le r(next.address) \\
+\mathbf{C}_{\mathbf{T}}(cur) = \begin{cases}
+    &r(cur).address \equiv r(next).address \rightarrow r(cur).id \le r(next).id \\
+    %&r(cur).accessType \equiv init \rightarrow r.(previous).address \neq r.(cur).address \\
     &r(next).accessType \equiv read \rightarrow r(next).value \equiv r(cur).value \\
-    &r(cur).address \neq r(prev).address \rightarrow r(cur).accessType \equiv init
-\end{split}
+    &r(cur).address \neq r(prev).address \leftrightarrow r(cur).accessType \equiv init \\
+    &r(cur).address \neq r(prev).address \rightarrow r(cur).address > r.(next).address
+\end{cases}
 \end{equation}
-and then establish a one-to-one correspondence between a valid memory access log sequence and a table that satisfy Equation \ref{eq:rw-constraints}.
+\begin{remark}
+Rearranging means the map from access log to $\mathbf{T}$ is a one to one map.
+The first constraint enforces that for access logs visiting the same address, they are sorted by their accessing order.  The second constraint enforces that the read access get the correct value and the third constraint enforces that init happens once and only once at the beginning of each address block. 
+\end{remark}
 \begin{theorem}
 \label{thm:one-one-rw-1}
-Give an valid memory access log ${L_i}$, then there exists a unique table satisfying the above constraints.
+Give an memory access log ${L_i}$, the log ${L_i}$ is valid if there exists a table $\mathbf{T}$ such that $\mathbf{T}$ satisfies the above constraints and each $L_i$ is in $\mathbf{T}$ and vice versa. 
 \end{theorem}
 \begin{proof}
+First, for init access log, the only constraint we need to enforce is that each address can only be init once. Suppose there are two init access logs $L_a$ and $L_b$ init the same address in the access log ${L_i}$, then they must both exists in $\mathbf{T}$ in the same address block, which contradicts the third constraint of Equation \ref{eq:rw-constraints}. Second, for read access log $L_r = (tid, mid, read, addr, v)$, we need to prove that the latest write or init access log $L_{latest}$ to $addr$ has put value $v$ into $addr$. Consider the second constraint of Equation \ref{eq:rw-constraints}, it is sufficient to prove that the $L_{latest}$ is the closest entry to $L_r$ in $\mathbf{T}$. Suppose that $L_{latest}$ is not the closest rewrite (init) entry to $L_r$ in $\mathbf{T}$, then there exists another write access log $L_o$ between $L_{latest}$ and $L_r$ such that $L_o.id > L_{latest}.id$ (by the first constraint of Equation \ref{eq:rw-constraints}) which means that $L_o$ is the latest update of $addr$ and contradicts the assumption. In the end, all the write access are valid because all the parameters are explicit.
 \end{proof}
-\begin{theorem}
-\label{thm:one-one-rw-2}
-Give an access log table $T$ that satisfy \ref{eq:rw-constraints}, then there exists a unique valid memory access log sequence $L_i$ such that $L_i.tid = T_k.tid$ and length of $L_i$ is equal to the length of $T$.
-\end{theorem}
-\begin{proof}
-\end{proof}
-When implementing \zkwasm, we encode the memory and stack changes into access log tables of memory (or stack) access logs table $T$ defined by Constraints \ref{eq:rw-constraints}. By doing so we can enforce the result $v$ of state read instructions $t_i.read(addr)$ by checking $(t_i, read, addr, v) \in T$.
+In the end, as a consequence of Theorem \ref{thm:one-one-rw-1}, given any read access at address $addr$ with fixed $tid$, $mid$ and $accessType$, we can check the validity of the return value $v$ by checking $(t_i, mid, accessType, addr, v) \in T$.
 

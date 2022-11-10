@@ -1,41 +1,48 @@
 \section{Instruction Circuits}
 \label{chp:instruction-circuits}
-Based on the execution trace circuit in Section \ref{chp:architecture-circuits}, we define constraints $\mathbf{C}_{op}$ for each opcode $op$. Since the constraint defined on the execution trace circuit will be applied on a row basis, and the ingredients of the constraints of each $op$ will span over multiple rows, we use the notation $C(curr+k)$ to denote the $k$th cell in column $c$ followed by the current row. For example, suppose that we want to define the constraints of add instruction using the following layout (see Figure \ref{tbl:add-instruction})
-\begin{table}[h]
+Once the architecture circuits are all prepared in Section \ref{chp:architecture-circuits}, the remaining things are design the circuits $\mathbf{C}_{op}$ of various opcode $op$ for instructions supported by WASM specification. Since the constraint defined on the execution trace circuit will be applied on a row basis, and the cells of the constraints of each $op$ will span over multiple rows, we use the notation $C(curr+k)$ to denote the $k$th cell in column $c$ followed by the current row.
+
+For example, suppose that we want to define the constraints of add instruction (see Figure \ref{fig:example-ins}) using the circuit layout in Table \ref{tbl:add-instruction}
+\begin{table}[!h]
 \begin{center}
+\caption{Add circuit within execution trace circuit}
+\label{tbl:add-instruction}
 \begin{tabular}{ | c | c | c | c | c | c | c | c | c | c | c | }
   \hline
   start & opcode & bit cell & state & aux & $address \in T_{I}$ & $sp \in T_\mathcal{F}$& u64 cell & extra \\ 
   \hline
    true & $add$ & $overflow$ & $tid$ & $nil$ & $iaddr_0$ & sp & $w_0$ & $nil$\\ 
  \hline
-   0 & $readStack$ & $nil$ & $nil$ & $nil$ & $nil$ & $sp_0$ & $w_1$ & $nil$\\ 
+   0 & $readStack$ & $nil$ & $nil$ & $nil$ & $nil$ & -- & $w_1$ & $nil$\\ 
  \hline
-   0 & $readStack$ & $nil$ & $nil$ & $nil$ & $nil$ & $sp_1$ & $w_2$ & $nil$\\ 
+   0 & $readStack$ & $nil$ & $nil$ & $nil$ & $nil$ & -- & $w_2$ & $nil$\\ 
  \hline
-   0 & $writeStack$ & $nil$ & $nil$ & $nil$ & $nil$ & $sp_2$ & $w_3$ & $nil$\\ 
+   0 & $writeStack$ & $nil$ & $nil$ & $nil$ & $nil$ & -- & $w_3$ & $nil$\\ 
  \hline
    true & $otherop$ & -- & $tid+1$ & $nil$ & $iaddr_1$ & $sp'$ & $w_0'$ & $nil$\\
  \hline
 \end{tabular}
-\caption{add circuit within execution trace circuit}
-\label{tbl:add-instruction}
+
 \end{center}
 \end{table}
-
-\noindent where $w_1$, $w_2$ are got from the stack and $w_2$ is equal to the result of the add instruction which is pushed back to the stack.
+where $w_1$, $w_2$ are got from the stack and $w_2$ is equal to the result of the add instruction which is pushed back to the stack.
+\begin{figure}
+\small
+\centering
 \begin{verbatim}
-def add:=
+def add :=
     w0 = read(stack sp);
-    sp0 = sp-1;
-    w1 = read(stack sp0);
+    w1 = read(stack sp-1);
+    sp' = sp-1;
     w2 = (w1 + w0) mod 2^64;
     write(stack, sp0, w2);
     FALLTHROUGH
 \end{verbatim}
-
-First, we know that by definition of add opcode, $w_0 = (w_1+w_2) \bmod 2^{64}$. Thus encode the $\bmod$ semantic into arithmetic constraint, and we get that $w_0 + overflow \times 2^{64}= w_1 + w_2$. Second we enforce the stack operation are valid, that are $(stack, read, sp_0, tid, 0, w0) \in T_\mathcal{M}$, $(stack, read, sp_1, tid, 1, w1) \in T_\mathcal{M}$ and $(stack, write, sp_2, tid, 2, w2) \in T_\mathcal{M}$. Third, we need to constrain that the next instruction must follow $iaddr_0$ in address, therefore $iadd_1 = iaddr_0 + 1$. In the end we constrain the $sp$ column by $sp_0 + 1= sp$, $sp_1 + 1= sp_0$, $sp_2 = sp+1$ and $sp' = sp_2$. Put it all together, and replace variables using the notation of $columnName.(curr + k)$, we have
-\[
+\caption{Add instruction definition}
+\label{fig:example-ins}
+\end{figure}
+First, we know that by definition of $add$, $w_0 = (w_1+w_2) \bmod 2^{64}$. Thus by introducing a new witness $overflow$ we encode the $\bmod$ semantic into arithmetic constraint as $w_0 + overflow \times 2^{64}= w_1 + w_2$. Second we enforce the stack operation are valid, that are $(stack, read, sp, tid, 0, w0) \in T_\mathcal{M}$, $(stack, read, sp-1, tid, 1, w1) \in T_\mathcal{M}$ and $(stack, write, sp-1, tid, 2, w2) \in T_\mathcal{M}$. Third, we need to constrain that the next instruction must follow $iaddr_0$ in address, therefore $iadd_1 = iaddr_0 + 1$. In the end we constrain the $sp$ column by $sp' + 1= sp$. Put it all together, and replace variables using the notation of $columnName.(curr + k)$, we have Equation \ref{eq:cs-add}.
+\begin{equation}
     \mathbf{C_{add}} = \begin{cases}
         &w.(curr) + bit.(curr) \times 2^{64} - w.(curr+1) + (w.curr + 2) = 0 \\
         &Plookup(T_\mathcal{M}, (stack, read, sp.(curr), tid, 0, w0)) = 0 \\
@@ -45,14 +52,23 @@ First, we know that by definition of add opcode, $w_0 = (w_1+w_2) \bmod 2^{64}$.
         &sp.curr + 1 - sp.(curr+1) = 0\\
         &sp.(curr+4) - sp.(curr) - 1 = 0
     \end{cases}
-\]
-Since constraints are applied on a row basis of a circuit, we need to make sure that $\mathbf{C}_{add}$ does not apply on rows that are not a starting row of an instruction block or a block with other opcodes. So a natural way to apply $\mathcal{C}_{add}$ only on necessary rows is to multiply $\mathbf{C}_{add}(curr)$ with $curr.start \times (curr.opcode == op)$ and the final constraint related to opcode add is $\overline{\mathbf{C}}_{add}(curr) := curr.start \times (curr.opcode == op) \times \mathbf{C}_{add}(curr) = 0$.
+    \label{eq:cs-add}
+\end{equation}
+Since constraints are applied on a row basis of a circuit, we need to make sure that $\mathbf{C}_{add}$ does not apply on rows that are not a starting row of an instruction block or a block with other opcodes. So a natural way to apply $\mathcal{C}_{add}$ only on necessary rows is to multiply $\mathbf{C}_{add}(curr)$ with $curr.start \times (curr.opcode == op)$ and the final constraint related to opcode add is $\overline{\mathbf{C}}_{add}(curr) := curr.start \times (curr.opcode == op) \times \mathbf{C}_{add}(curr) = 0$. 
 
-After we have constructed all the constraints $\mathcal{C}_{op_i}$ for all opcodes $op_i$, we simply sum them up and get the final constraint $\mathcal{C}_{op}(curr) := \sum_i cur.start \times (cur.opcode == op) \times \mathcal{C}_{op_i}(curr) = 0$.
+\begin{remark}
+For better readability, from this point we will simply use the name of the cell instead of the the notation $columnName.(curr + k)$ if no confusion is introduced by doing so.
+\end{remark}
+
+\noindent The content of the rest of this section is arranged in subsections to describe circuits of instructions in different categories. After we have constructed all the constraints $\mathcal{C}_{op_i}$ for all opcodes $op_i$, we simply sum them up and get the final constraint $\mathcal{C}_{op}(curr) := \sum_i cur.start \times (cur.opcode == op) \times \mathcal{C}_{op_i}(curr) = 0$ for $\mathbf{T}_\mathcal{E}$.
+
 
 \subsection{Numeric Instructions}
 \label{chp:numeric-instruction}
-Numeric Instructions are the majority of instructions in WASM. In general, the semantics of numeric instructions contain three parts, parameters preparation, arithmetic calculation, result writeback and FALLTHROUGH as follows.
+Numeric Instructions are the majority of instructions in WASM. In general, the semantics of numeric instructions contain file parts, parameters preparation, arithmetic calculation, result writing back, update stack pointer and FALLTHROUGH as in Figure \ref{fig:ins-arith}.
+\begin{figure}[h!]
+\small
+\centering
 \begin{verbatim}
 def arithop :=
     param1 = read(stack sp); \\ parameters preparation
@@ -64,9 +80,16 @@ def arithop :=
     sp = sp-N+1;
     FALLTHROUGH;
 \end{verbatim}
-Based on the arithmetic definition, we assign the cells in the execution trace circuit $T_\mathcal{E}$ in Table \ref{tbl:arith-instruction}. Moreover, assume the constraint is applied on the first row of the instruction block and the constraint of arithop is defined in Equation \ref{eq:cs-arith}.
+\caption{Arithmetic instruction}
+\label{fig:ins-arith}
+\end{figure}
+
+Based on the arithmetic definition, we assign the cells in the execution trace circuit $T_\mathcal{E}$ in Table \ref{tbl:arith-instruction} and the constraint of arithop is defined in Equation \ref{eq:cs-arith}.
 \begin{table}[!h]
+\small
 \begin{center}
+\caption{Add circuit in execution trace circuit}
+\label{tbl:arith-instruction}
 \begin{tabular}{ | c | c | c | c | c | c | c | c | c | c | c | }
   \hline
   start & opcode & bit cell & state & aux & $address \in T_{I}$ & $sp \in T_\mathcal{F}$& u64 cell & extra \\ 
@@ -82,27 +105,30 @@ Based on the arithmetic definition, we assign the cells in the execution trace c
     true & $otherop$ & -- & $tid+1$ & $nil$ & $iaddr_1$ & $sp'$ & $w_0'$ & $nil$\\
  \hline
 \end{tabular}
-\caption{add circuit in execution trace circuit}
-\label{tbl:arith-instruction}
+
 \end{center}
 \end{table}
 \begin{equation}
-    \mathbf{C_{arith}} = \begin{cases}
+    \mathbf{C}_{arith} = \begin{cases}
         &arith(param_0, param_1, ..., param_N) - result = 0 \\
-        &Plookup(T_\mathcal{M}, (stack, read, sp - k, tid, k, param_k) = 0 \\
-        &Plookup(T_\mathcal{M}, (stack, write, sp' - 1, tid, N, result) = 0 \\
+        &Plookup(\mathbf{T}_\mathcal{M}, (stack, read, sp - k, tid, k, param_k) = 0 \\
+        &Plookup(\mathbf{T}_\mathcal{M}, (stack, write, sp' - 1, tid, N, result) = 0 \\
         &iaddr_0 + 1 - iaddr_1 = 0\\
         &sp - sp' - N + 1 = 0\\
     \end{cases}
 \label{eq:cs-arith}
 \end{equation}
 \subsection{Control Flow Instructions}
-In WASM specification, there are three different types of control flow: FALLTHROUGH, branch, and call (return). Implementation of the FALLTHROUGH is already covered in Section \ref{chp:numeric-instruction}. Thus it is sufficient to implement call (return) and branch.
+\label{chp:control-flow-ins}
+In WASM specification, there are three different categories of control flow: \emph{FALLTHROUGH}, \emph{branch}, and \emph{call} (\emph{return}). Implementation of the \emph{FALLTHROUGH} is already covered in Section \ref{chp:numeric-instruction}. Thus it is sufficient to implement call (return) and branch.\\
 
-\smallskip\noindent\emph{Call (Return) Circuit.}
-Call instruction will first add a new Frame Table Entry $(tid, frameId, iaddr_0)$ into the Frame Circuits $T_\mathcal{F}$ and then load calling parameters onto the stack and go to the $iaddr_1$ for next instruction (see Table \ref{tbl:call-instruction} for the circuit layout of \emph{call}),
+\noindent\emph{Call (Return) Circuit.}
+Call instruction will first add a new frame table entry $(tid, frameId, iaddr_0)$ into the frame circuits $T_\mathcal{F}$ and then load calling parameters onto the stack and go to the $iaddr_1$ for next instruction (see Table \ref{tbl:call-instruction} for the circuit layout of \emph{call}). The circuit constraint for call instruction is Equation \ref{eq:cs-call}.
 \begin{table}[!h]
+\small
 \begin{center}
+\caption{Circuit layout of call}
+\label{tbl:call-instruction}
 \begin{tabular}{ | c | c | c | c | c | c | c | c | c | c | c | }
   \hline
   start & opcode & bit cell & state & aux & $address \in T_{I}$ & $sp \in T_\mathcal{F}$& u64 cell & extra \\ 
@@ -118,28 +144,27 @@ Call instruction will first add a new Frame Table Entry $(tid, frameId, iaddr_0)
    0 & $nil$ & $nil$ & $nFrameId$ & $nil$ & $nil$ & $nil$ & $nil$ & $nil$\\ 
  \hline
 \end{tabular}
-\caption{circuit layout of call}
-\label{tbl:call-instruction}
+
 \end{center}
 \end{table}
-
-\noindent where the circuit constraint is:
-\[
+\begin{equation}
     C_{call} = \begin{cases}
-        &Plookup(T_\mathcal{M}, (stack, write, sp+i, tid, i, param_i)) = 0 \\
-        &Plookup(T_\mathcal{F}, (tid, pFrameId, iaddr_0)) = 0 \\
+        &Plookup(\mathbf{T}_\mathcal{M}, (stack, write, sp+i, tid, i, param_i)) = 0 \\
+        &Plookup(\mathbf{T}_\mathcal{F}, (tid, pFrameId, iaddr_0)) = 0 \\
         &iaddr_1 - targetIaddr = 0\\
         &sp' - sp - N = 0 \\
         &nFrameId - tid = 0.
     \end{cases}
-\]
-
- As we mentioned in Section \ref{chp:frame-circuit}, all the entries in $T_\mathcal{F}$ are used to help the return instruction to find the correct calling frame so that we can define the semantics of \emph{return} by finding the correct return \emph{iaddr} in $T_\mathcal{F}$ (see Table \ref{tbl:return-instruction} for the circuit layout of \emph{return}),
+\label{eq:cs-call}
+\end{equation}
+ To define the constraint for \emph{Return} instruction, we need to find the correct return address of the current frame and set the frame state to the previous frame. Recall that, as described in Section \ref{chp:frame-circuit}, the entries in $T_\mathcal{F}$ are used to help the return instruction to find the correct calling frame and previous frame. Thus we can define the semantics of \emph{return} by finding the correct return \emph{iaddr} from $T_\mathcal{F}$ and then enforce that the next instruction address is equal to \emph{iaddr} and update the frame state accordingly (see Table \ref{tbl:return-instruction} for the circuit layout and Equation \ref{eq: cs-return} for the circuit constraint).
 \begin{table}[!h]
 \begin{center}
+\caption{Circuit layout of return}
+\label{tbl:return-instruction}
 \begin{tabular}{ | c | c | c | c | c | c | c | c | c | c | c | }
   \hline
-  start & opcode & bit cell & state & aux & $address \in T_{I}$ & $sp \in T_\mathcal{F}$& u64 cell & extra \\ 
+  start & opcode & bit cell & state & aux & $address \in \mathbf{T}_{I}$ & $sp \in \mathbf{T}_\mathcal{F}$& u64 cell & extra \\ 
   \hline
    true & $return$ & $nill$ & $tid$ & $nil$ & $iaddr_0$ & sp & $nil$ & $nil$\\ 
  \hline
@@ -150,21 +175,22 @@ Call instruction will first add a new Frame Table Entry $(tid, frameId, iaddr_0)
    0 & $nil$ & $nil$ & $nFrameId$ & $nil$ & $nil$ & $nil$ & $nil$ & $nil$\\ 
  \hline
 \end{tabular}
-\caption{circuit layout of return}
-\label{tbl:return-instruction}
+
 \end{center}
 \end{table}
-and the circuit constraint is Equation \ref{eq: cs-return}.
 \begin{equation}
     C_{return} =  \begin{cases}
-        &Plookup(T_\mathcal{F}, (pFrameId, nFrameId iaddr_1 - 1)) = 0 \\
+        &Plookup(\mathbf{T}_\mathcal{F}, (pFrameId, nFrameId, iaddr_1 - 1)) = 0 \\
         &sp' - sp = 0 \\
     \end{cases}
 \label{eq: cs-return}
 \end{equation}
-
-\smallskip\noindent\emph{Branch Circuit.}
-Branch instructions in WASM include \emph{br}, \emph{br\_if}, \emph{if * then * else *}, etc. The semantics of branch instructions can be uniformly abstracted as three steps. First, read related parameters from the stack. Second, calculate the target branch address according to the params. Third, branch to the target branch address.
+\\
+\noindent\emph{Branch Circuit.}
+Branch instructions in WASM include \emph{br}, \emph{br\_if}, \emph{if * then * else *}, etc. The semantics of branch instructions can be uniformly abstracted as three steps (see Figure \ref{fig:inst-branch}).
+\begin{figure}[h!]
+\small
+\centering
 \begin{verbatim}
 def branchop :=
     param1 = read(stack sp); \\ parameters preparation
@@ -172,11 +198,17 @@ def branchop :=
     ...
     paramN = read(stack (sp-N+1)); \\ parameters preparation
     iaddr1 = select(param1, param2, ..., paramN); \\ calculate branch address
-    GOTO iaddr2;
+    GOTO iaddr2; \\branch to target address
 \end{verbatim}
+\caption{Semantic of branch instruction}
+\label{fig:inst-branch}
+\end{figure}
 \smallskip The circuit layout of the branch instruction is sketched in Table \ref{tbl:branch-instruction} and its circuit constraint is defined in Equation \ref{eq:cs-branchop}. 
 \begin{table}[!h]
+\small
 \begin{center}
+\caption{Circuit layout of call}
+\label{tbl:branch-instruction}
 \begin{tabular}{ | c | c | c | c | c | c | c | c | c | c | c | }
   \hline
   start & opcode & bit cell & state & aux & $address \in T_{I}$ & $sp \in T_\mathcal{F}$& u64 cell & extra \\ 
@@ -192,12 +224,11 @@ def branchop :=
    0 & $nil$ & $nil$ & $nFrameId$ & $nil$ & $nil$ & $nil$ & $nil$ & $nil$\\ 
  \hline
 \end{tabular}
-\caption{circuit layout of call}
-\label{tbl:branch-instruction}
+
 \end{center}
 \end{table}
 \begin{equation}
-    C_{call} = \begin{cases}
+    C_{branch} = \begin{cases}
         &Plookup(T_\mathcal{M}, (stack, write, sp+i, tid, i, param_i)) = 0 \\
         &iaddr_1 - select(param_0, param_1, \cdots) = 0 \\
         &nFrameId - pFrameId = 0.
@@ -206,13 +237,16 @@ def branchop :=
 \end{equation}
 
 \subsection{Memory (Stack, Global) Instructions}
-Memory, Stack and Global instructions can be abstracted as a tuple of \emph{(category=Memory|Stack|Global, type=INIT|READ|WRITE, address, size = 8|16|32|64, value)} and the layout of the circuit is defined in Table \ref{tbl:memory-instruction}. By using the access log circuit defined in Chapter \ref{chp:access-log-circuit}, the constraint for the memory circuit is simply $(category, ltype, tid, address, value') \in T_\mathcal{M} \wedge trunc(value', size) = value$.
+Memory, Stack and Global instructions can be abstracted as a tuple of ($category$, $type$, $address$, $size$ = 8|16|32|64, $value$) where $category$ can be Memory, Stack or Global and $type$ can be Init, Read or Write. The layout of the circuit is defined in Table \ref{tbl:memory-instruction}. By using the access log circuit defined in Chapter \ref{chp:access-log-circuit}, the constraint for the memory circuit is simply $(category, ltype, tid, address, value') \in T_\mathcal{M} \wedge trunc(value', size) = value$.
 
 \begin{remark}
 For read, this constraint ensures the result read from $address$ is valid. For write, $T_\mathcal{M}$ ensures that the next $read$ of $address$ will return the previously written value correctly.
 \end{remark}
 \begin{table}[!h]
+\small
 \begin{center}
+\caption{Memory access circuit within execution trace circuit}
+\label{tbl:memory-instruction}
 \begin{tabular}{ | c | c | c | c | c | c | c | c | c | c | c | }
   \hline
   start & opcode & bit cell & state & aux & $address \in T_{I}$ & $sp \in T_\mathcal{F}$& u64 cell & extra \\ 
@@ -226,7 +260,6 @@ For read, this constraint ensures the result read from $address$ is valid. For w
    0 & $nil$ & $nil$ & $frameId = tid$ & $nil$ & $nil$ & $nil$ & $w_3$ & $nil$\\ 
  \hline
 \end{tabular}
-\caption{memory access circuit within execution trace circuit}
-\label{tbl:memory-instruction}
+
 \end{center}
 \end{table}
