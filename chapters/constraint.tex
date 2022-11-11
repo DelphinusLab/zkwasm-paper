@@ -1,4 +1,4 @@
-\section{Basic building blocks of \zkwasm circuits}
+\section{Basic building blocks of \zkwasm\ circuits}
 \label{chp:build-blocks}
 As described in Section \ref{chp:encode-state-in-circuits}, the arithmetic circuit of execution trace is crucial in constructing SNARKS of WASM virtual machine. In this section we will give a brief of some basic techniques and elementary circuits used to construct our final arithmetic circuits in \zkwasm.
 
@@ -6,12 +6,14 @@ As described in Section \ref{chp:encode-state-in-circuits}, the arithmetic circu
 %From a circuit description we can generate a proving key and a verification key, which are needed for the operations of proving and verification for that circuit.
 
 \subsection{Representing Basic Types in Halo2 Constraint System}
-Recall that to prove an arithmetic circuit matrix with constraint $\mathbf{C}$ holds the Plonkish proof system interpolates each column $c_i$ into polynomials $c_i(x)$ such that $c_i(j) = c_{ij}$ and then uses KCG commitment scheme to prove $\mathcal{C}(c_i(x)) = 0$ holds for all $x=1,2,3,\cdots$. 
 
-However, to use KZG commitment scheme on polynomial $c_i$, we require $c_i(x) \in \mathbf{F}$ where $\mathbf{F}$ is the scalar field of some elliptic curve $\mathbf{C}$. Therefore each $c_i(j)$ is in the scalar field $\mathbf{F}$ of the elliptic curve $\mathbf{C}$ in Halo2's arithmetic circuit system. Since the basic types in WebAssembly are i64 and i32 which do not match the number field $\mathbf{F}$ in Halo2, we need to add a constraint $x<2^{32}$ (or $x< 2^{64}$) to represent a variable $x$ with type $i32$ or $i64$. In \zkwasm, we use $\mathbf{T_N}$ to denote a table containing elements from $0$ to $2^N-1$ and then we use a polynomial lookup to prove that values of some column $c_i$ are less than $2^N-1$ by $plookup(\mathbf{T_N}, c_i(j)) = 0$. When $N$ is large (e.g. 64) and $\mathbf{T_N}$ becomes too big, we will decompose an i64 into several parts and prove that each part is less then $2^8-1$. Below we use the notation $x \in \mathbf{T_N}$ to denote $x < 2^N$ and omit the details of decomposing $x$ into small pieces when necessary.
+Recall that to prove an arithmetic circuit matrix with constraint $\mathbf{C}$ holds, the Plonkish proof system interpolates each column $c_i$ into polynomials $c_i(x)$ such that $c_i(j) = c_{ij}$ and then uses KCG commitment scheme to prove $\mathcal{C}(c_i(x)) = 0$ holds for all $x=1,2,3,\cdots$. 
+
+However, to use KZG commitment scheme on polynomial $c_i$, we require $c_i(x) \in \mathbf{F}$ where $\mathbf{F}$ is the scalar field of some elliptic curve $\mathbf{C}$. Therefore, each $c_i(j)$ is in the scalar field $\mathbf{F}$ of the elliptic curve $\mathbf{C}$ in Halo2's arithmetic circuit system. Since the basic types in WASM are i64 and i32 which do not match the number field $\mathbf{F}$ in Halo2, we need to add a constraint $x<2^{32}$ (or $x< 2^{64}$) to represent a variable $x$ with type $i32$ or $i64$. In \zkwasm, we use $\mathbf{T_N}$ to denote a table containing elements from $0$ to $2^N-1$ and then we use a polynomial lookup to prove that values of some column $c_i$ are less than $2^N-1$ by $plookup(\mathbf{T_N}, c_i(j)) = 0$. When $N$ is large (e.g. 64) and $\mathbf{T_N}$ becomes too big, we will decompose an i64 into several parts and prove that each part is less then $2^8-1$. Below we use the notation $x \in \mathbf{T_N}$ to denote $x < 2^N$ and omit the details of decomposing $x$ into small pieces when necessary.
 
 \subsection{Representing Map Using Polynomial Lookup of Tables}
 \label{chp:map-repr}
+
 Other than specifying a range for cells, another usage of polynomial lookup is that we can encode the state of key-value map into tables and use polynomial lookup to specify the semantics of getting a value of a certain key in a map. 
 
 Here is an example. Recall that we represent the state of \zkwasm\, by \fullstate \, where $\mathcal{C}$ and $\mathcal{H}$ are fixed by the WASM image. We encode state $\mathcal{C}$ and $\mathcal{H}$ in tables $\mathbf{T}_\mathcal{C} : Address \times Opcode$ and $\mathbf{T}_\mathcal{H}: Address \times U64$. By doing this, we can use the polynomial lookup to specify the semantic of getting opcode $op$ at address $addr$ in $\mathcal{C}$ by $(iaddr, op) \in \mathbf{T}_\mathcal{C}$ and specify the semantic of WASM of getting the initial byte data $v$ at address $addr$ in $\mathcal{H}$ by $(d, addr) \in \mathbf{T}_\mathcal{H}$.
@@ -19,7 +21,7 @@ Here is an example. Recall that we represent the state of \zkwasm\, by \fullstat
 \subsection{Representing Math Semantic as Arithmetic Circuits}
 According to the WASM specification, the semantics of opcodes are usually defined as mathematical equations and state transformation. Thus we need to construct arithmetic circuits to enforce the semantics of the opcodes. For example, suppose that the opcode $div_u$ (a division of unsigned int) has the following semantics:
 \[ div_u(a, b) = (a - a \bmod b) \div b \] 
-Then it follows that to write the above mathematical definition into polynomial constraints we need to introduce intermediate witness $r$ such that the above semantics can be rewritten as follows:
+It follows that to write the above mathematical definition into polynomial constraints we need to introduce intermediate witness $r$ such that the above semantics can be rewritten as follows:
 \begin{equation}
 \begin{cases}
     a = div_u(a,b) * b + r \\
@@ -36,7 +38,7 @@ However, since $r$ and $b$ are in $\mathbf{F}$, it needs more work to represent 
 \end{equation}
 When dealing with opcode that has more complicated mathematical semantics, we need a way to formally prove that the derived constraints represent the same semantic. In \zkwasm, we use Z3 to formally check that the mathematical definition is correctly refined to the arithmetic circuits.
 
-\subsection{Enforce Valid Dynamic State Accessing using Polynomial Lookup Tables}
+\subsection{Enforcing Valid Dynamic State Accessing using Polynomial Lookup Tables}
 Given a sequence of state transition function $\{t_i\}$ such that each transition might read or write finitely many key-value pairs (e.g. access memory $\mathcal{M}$, stack $\mathcal{SP}$ or global $\mathcal{G}$) in the state $\mathcal{S}$. We label each read or write of $\{t_i\}$ in a sub sequence $\{t_i^k\}$ and use the tuple $(tid=i, mid=k, accessType, address, value)$ to denote the access log of $\{t_i^k\}$ such that each access log has the following semantic:
 \begin{itemize}
     \item Init memory: $(tid, mid, init, addr, v ) := \{ s.addr = v; \}$

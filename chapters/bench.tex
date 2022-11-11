@@ -3,7 +3,7 @@
 All the benchmark test suites are run on a machine with AMD Ryzen 7 5800X3D 8-Core Processor, one GeForce RTX 3090 graphic card and 32G * 4 DDR4 2133 ram.
 
 \subsection{Performance without Program Partition and Proof Batching}
-Among programs whose valid execution trace fits into the max sequence size of \zkwasm, we measure the performance of \zkwasm\, when dealing with two special programs: the Fibonacci function which has a deep call stack and the binary search function which has frequent memory access. As shown in Table \ref{tbl:fib} and Table \ref{tbl:bsearch}, circuit size $CS$ denotes the total number of rows of circuits in \zkwasm, as a power of $2$ and trace size denotes the total instructions included in the execution trace. Proof time is the time \zkwasm used to create the proof for the valid execution and the verify time is the time for a verifier to check the proof. The column \emph{memory swap} indicates whether the overall memory consumption is large than 128G.
+Among programs whose valid execution trace fits into the max sequence size of \zkwasm, we measure the performance of \zkwasm\, when dealing with two special programs: the Fibonacci function which has a deep call stack and the binary search function which has frequent memory access. As shown in Table \ref{tbl:fib} and Table \ref{tbl:bsearch}, circuit size $CS$ denotes the total number of rows of circuits in \zkwasm\, as a power of $2$ and trace size denotes the total instructions included in the execution trace. Proof time is the time \zkwasm\, used to create the proof for the valid execution and the verify time is the time for a verifier to check the proof. The column \emph{memory swap} indicates whether the overall memory consumption of \zkwasm is large than 128G.
 \begin{table}[!h]
 \small
 \begin{center}
@@ -52,7 +52,7 @@ Among programs whose valid execution trace fits into the max sequence size of \z
 \end{center}
 \end{table}
 
-From Table \ref{tbl:fib} and Table \ref{tbl:bsearch} we see that the verifying time is O(1) and proof time grows linearly when the size of the circuit grows. When the memory usage is small, the instruction volume grows linearly as the circuit size grows (see Table \ref{tbl:fib}). When the memory consumption grows linearly as the circuit size grows, the instruction volume grows slowly as shown in Table \ref{tbl:bsearch}.
+From Table \ref{tbl:fib} and Table \ref{tbl:bsearch} we see that the verifying time is O(1) and proof time grows linearly when the size of the circuit grows. When the memory consumption of the simulated image (Fibonacci) is small, the instruction volume grows linearly as the circuit size grows (see Table \ref{tbl:fib}). When the memory consumption of the simulated image (binary search) grows linearly as the circuit size grows, the instruction volume grows slowly as shown in Table \ref{tbl:bsearch}.
 
 
 \subsection{Performance for Large Program with Proof Batching}
@@ -87,7 +87,7 @@ In conclusion, if we have a large program for \zkwasm\, and we want to optimize 
 
 \section{Conclusion \& Further Work}
 \label{chp:conclusion}
-We presented \zkwasm, a WASM virtual machine that leverages the technology of \zksnark. As far as know, we are the first to present a novel way to implement the semantics of a WASM virtual machine in arithmetic circuits. Using \zkwasm, we will be able to deploy serverless service in an untrusted cloud since \zkwasm\, does not only emulates the execution but also gives a correctness proof of the execution result. Thus any vulnerability on the cloud will not affect the correctness of the verifiable result (a faulty result can not have correct ZKSNARK proof).
+We presented \zkwasm, a WASM virtual machine that leverages the technology of \zksnark. As far as know, we are the first to present a novel way to implement the semantics of a WASM virtual machine in arithmetic circuits. Using \zkwasm, we are able to deploy serverless service in an untrusted cloud since \zkwasm\, does not only emulates the execution but also gives a correctness proof of the execution result. Hence any vulnerability on the cloud will not affect the correctness of the verifiable result (a faulty result cannot have correct ZKSNARK proof).
 
 For large applications that provide large execution traces, we successfully applied the execution partition and proof batching technique so the \zkwasm\, scales when the program size grows. Regarding the performance, various optimization can be applied in the future including improving the commitment scheme \cite{chen2022hyperplonk}, adopting a better parallel computing strategy \cite{wu2018dizk}, using SNARK specific hardware \cite{peng2020design, xavier2022pipemsm}, etc.
 
