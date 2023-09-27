@@ -1,62 +1,94 @@
 \section{Performance Benchmark}
 \label{chp:performance}
-All the benchmark test suites are run on a machine with AMD Ryzen 7 5800X3D 8-Core Processor, one GeForce RTX 3090 graphic card and 32G * 4 DDR4 2133 ram.
+All the benchmark test suites are run on a machine with AMD Ryzen 7 5800X3D 8-Core Processor, one GeForce RTX 4090 graphic card and 32G * 4 DDR4 ram.
 
-\subsection{Performance without Program Partition and Proof Batching}
-Among programs whose valid execution trace fits into the max sequence size of \zkwasm, we measure the performance of \zkwasm\, when dealing with two special programs: the Fibonacci function which has a deep call stack and the binary search function which has frequent memory access. As shown in Table \ref{tbl:fib} and Table \ref{tbl:bsearch}, circuit size $CS$ denotes the total number of rows of circuits in \zkwasm\, as a power of $2$ and trace size denotes the total instructions included in the execution trace. Proof time is the time \zkwasm\, used to create the proof for the valid execution and the verify time is the time for a verifier to check the proof. The column \emph{memory swap} indicates whether the overall memory consumption of \zkwasm is large than 128G.
+During the execution of \zkwasm, there exist four different costs, namely the simulation cost, the synthesize cost, the proof generation cost (for separated code segments), and the proof batching cost. The simulation cost is the time needed for the WASM simulator to run the program. This is usually comparable with a standard WASM interpreter like wasmi and is slow then an optimized WASM runtime like wasmtime. Ingeneral the simulation process is hard to parallel. The synthesize cost is used to generate the witness table for the \zkwasm\, circuit. The proving generation cost is the most significant time consuming part the \zkwasm, which generates the proof of the execution of a single code segment. If the size of the execution trace of a program does not fit into a single code segment (more than $2^{24}$ instructions), then we need to split the execution trace into multiple segments and batching the proof of each segments which introduce the batching cost.
+
+\subsection{Benchmark for single segment}
+Unlike a traditional VM, in which, instructions might have different execution time, the main cost of the \zkwasm, is the evaluation of each polynomial (represent by the column of the witness table). Recall that in zkWASM each instruction occupies 4 rows in the witness table, thus the total proof generation time for each instruction is the same. With our loss of generality, we set the total rows of our circuit size to be $2^{20}$, $2^{19}$ and $2^{22}$ which theoretically can support the maximum trace of the $2^{18}$, $2^{19}$ and $2^{20}$ instructions. The sample programs we run with this setup include simple functions (Fibonacci and binary search), hash functions (SHA256 hash, keccak256), general purpose functions (JSON decoder/encoder, Syntax parser), etc.  
+
+
 \begin{table}[!h]
 \small
 \begin{center}
-\caption{Benchmark for fibonacci in \zkwasm}
+\caption{Benchmark for Fibonacci \& binary search in \zkwasm}
 \label{tbl:fib}
 \begin{tabular}{ | c | c | c | c | c| c| }
   \hline
-  circuit size & trace size & call depth & proof time & verify time & memory swap\\ 
+  circuit size & max trace size & max synthesize time & proof time & verify time \\ 
   \hline
-  18 & 9037 & 13 & 44s & 22 ms & false\\
+  $2^{18}$ & 53677 & 0.2s & 4.8s & 22ms \\
   \hline
-    19 & 23677 & 15 & 88s & 24 ms & false \\
+  $2^{19}$ & 108317 & 0.6s & 10s & 24ms \\
   \hline
-    20 & 38317 & 16 & 178s & 22 ms & false \\
+    $2^{20}$ & 162033 & 1.2s & 20s & 22ms \\
   \hline
-    21 & 100333 & 18 & 358s & 22ms & false\\
+    $2^{21}$ & 462349 & 2.2s & 41s & 22ms \\
   \hline
-    22 & 162349 & 19 & 828s & 29ms & true \\
+    $2^{22}$ & 940346 & 4.5s & 82s & 29ms \\
   \hline
 \end{tabular}
 
+\end{center}
+\end{table}
+\begin{table}[!h]
+\small
+\begin{center}
+\caption{Benchmark for hash functions in \zkwasm}
+\label{tbl:hash}
+\begin{tabular}{ | c | c | c | c | c| c| }
+  \hline
+  circuit size & max trace size & max synthesize time & proof time & verify time \\ 
+  \hline
+  $2^{18}$ & 49076 & 0.19s & 4.9s & 22ms \\
+  \hline
+  $2^{19}$ & 110259 & 0.6s & 10s & 24ms \\
+  \hline
+    $2^{20}$ & 150084 & 0.9s & 20s & 22ms \\
+  \hline
+    $2^{21}$ & 440737 & 2.2s & 41s & 22ms \\
+  \hline
+    $2^{22}$ & 862349 & 4 s & 84s & 29ms \\
+  \hline
+\end{tabular}
 \end{center}
 \end{table}
 
 \begin{table}[!h]
 \small
 \begin{center}
-\caption{Benchmark for binary search in \zkwasm}
-\label{tbl:bsearch}
-\begin{tabular}{ | c | c | c | c | c | c | }
+\caption{Benchmark for general purpose functions in \zkwasm}
+\label{tbl:general-purpose}
+\begin{tabular}{ | c | c | c | c | c| c| }
   \hline
-  circuit size & trace size & search buf size (64k per page) & proof time & verify time & memory swap\\ 
+  circuit size & max trace size & max synthesize time & proof time & verify time \\ 
   \hline
-  18 & 585 & 26 & 44.200s & 22 ms & false\\
+  $2^{18}$ & 63134 & 0.22s & 4.9s & 22ms \\
   \hline
-    19 & 616 & 63 & 87.200s & 24 ms & false \\
+  $2^{19}$ & 109368 & 0.6s & 10s & 24ms \\
   \hline
-    20 & 647 & 124 & 173.200s & 22 ms & false \\
+    $2^{20}$ & 240523 & 1.2s & 20s & 22ms \\
   \hline
-    21 & 678 & 246 & 342.200s & 24ms & false\\
+    $2^{21}$ & 420426 & 2.1s & 40s & 22ms \\
   \hline
-    22 & 809 & 490 & 803.200s & 25ms & true \\
+    $2^{22}$ & 970862 & 4.6s & 84s & 29ms \\
   \hline
 \end{tabular}
-
 \end{center}
 \end{table}
 
-From Table \ref{tbl:fib} and Table \ref{tbl:bsearch} we see that the verifying time is O(1) and proof time grows linearly when the size of the circuit grows. When the memory consumption of the simulated image (Fibonacci) is small, the instruction volume grows linearly as the circuit size grows (see Table \ref{tbl:fib}). When the memory consumption of the simulated image (binary search) grows linearly as the circuit size grows, the instruction volume grows slowly as shown in Table \ref{tbl:bsearch}.
-
-
+In Table [\ref{tbl:fib}, \ref{tbl:hash}, \ref{tbl:general-purpose}], the total number of rows of the witness table in \zkwasm\, as a power of two. The trace size denotes the total instructions included in the execution trace. The synthesize time is the time to generate all the witness needed and proof time is the time \zkwasm\, used to create the proof for the valid execution and the verify time is the time for a verifier to check the proof. From these data, we see that the verifying time is O(1) and the proof time grows linearly when the size of the circuit grows. The synthesize time describes the cost of the witness generation time which grows lineally as the trace size grows.
 \subsection{Performance for Large Program with Proof Batching}
-For a program with a large execution sequence, we split the execution trace into partitions and generate a sub-proof for each partition. To batch these sub proofs, we use the batching circuit (see Section \ref{chp:sharding-batching}) to generate a batched proof. Therefore the time of creating a final proof of a large program is the sum of sub-proof generation time plus the proof batching time.
+For a program with a large execution sequence, then the overall proving time will be the segment proving time plus the batching time. Similar to the \zkwasm\, circuit, the batching circuit (see Section \ref{chp:sharding-batching}) has its size limit as well. Thus in general, we can not batch all the segment in one round. In practical, we using the following batching pipeline.
+\begin{figure}[!ht]
+\centerline{
+\includegraphics[scale=0.6]{figs/batch-pipeline.png}
+}
+\caption{Split execution sequence into sub sequence}
+\label{fig:batch-pipeline}
+\end{figure}
+
+Based on the above pipeline, we would like to pick parameter $k$ and $n$ to maximize the overall performance (instruction per second). The table \ref{tbl:proof-batching} shows the relationship before $n$ and $k$ and the overall proving time for the batch circuit. 
 \begin{table}[!h]
 \small
 \begin{center}
@@ -64,26 +96,24 @@ For a program with a large execution sequence, we split the execution trace into
 \label{tbl:proof-batching}
 \begin{tabular}{ | c | c | c | c | c | c | c| }
   \hline
-  partition CS & partition proof & total pieces& batching CS & batching proof & verify time & memory swap\\ 
+  circuit size $k$ & code segment $n$ & proving time & verify time \\ 
   \hline
-  18 & 2 & 1 & 22 & 168s & 4.7 ms & false\\
+  $2^{21}$ & 1 & 23s & 4.7ms\\
   \hline
-  18 & 2 & 2 & 22 & 326s & 4.63 ms & false\\
+  $2^{22}$ & 2 & 46s & 4.63ms\\
   \hline
-    20 & 2 & 1 & 22 & 168s & 4.77 ms & false \\
+  $2^{23}$ & 4 & 95s & 4.77ms\\
   \hline
-    20 & 2 & 2 & 22 & 324s & 5.05ms & false\\
-  \hline
-    22 & 2 & 1 & 22 & 168s & 5.07ms & false\\
-  \hline
-    22 & 2 & 2 & 22 & 325s & 4.93ms & true \\
+  $2^{24}$ & 8 & 192s & 5.05ms\\
   \hline
 \end{tabular}
 \end{center}
 \end{table}
-It can be seen in Table \ref{tbl:proof-batching} that the proving time for batching sub-proofs with different partition size is constant and the only factor that affects the batching proof time is the number of pieces of sub-proof. 
-
-In conclusion, if we have a large program for \zkwasm\, and we want to optimize the total time of generating the final proof, then the factors we need to consider are the following: First, What is the partition size we use to split the whole transaction sequence. Second, how many pieces we should put together in one proof batch. Third, how we generate the proofs in parallel.
+In conclusion, Both the number of segments can be batched and the proving time grows linearly as the circuit size of batch circuit. Thus he overall performance with circuit size $k$ can be abstracted as follows (where $ips$ denotes instructions per-second):
+$$
+ ips = \frac{k * n * t_{wasm} + k * t_{batch}}{k}
+$$
+By picking $k = 2^{24}$, we reach around $2^{15}$ instructions per-seconds when the program trace is large.
 
 \section{Conclusion \& Further Work}
 \label{chp:conclusion}
